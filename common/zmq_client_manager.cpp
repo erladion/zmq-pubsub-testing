@@ -1,6 +1,8 @@
 #include "zmq_client_manager.h"
 #include "zmq_common.h"
 
+#include <zmq_addon.hpp>
+
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -9,21 +11,6 @@
 #include <QStandardPaths>
 #include <QUuid>
 #include <QtConcurrent/QtConcurrent>
-
-// --- HELPER FUNCTION: MANUAL MULTIPART RECEIVE ---
-static bool receive_multipart_safe(zmq::socket_t& socket, std::vector<zmq::message_t>& msgs) {
-  msgs.clear();
-  while (true) {
-    zmq::message_t msg;
-    auto res = socket.recv(msg, zmq::recv_flags::none);
-    if (!res)
-      return false;
-    msgs.emplace_back(std::move(msg));
-    if (!socket.get(zmq::sockopt::rcvmore))
-      break;
-  }
-  return true;
-}
 
 ZmqClientManager* g_instance = nullptr;
 
@@ -158,7 +145,9 @@ void ZmqClientManager::workerLoop() {
 
     if (items[0].revents & ZMQ_POLLIN) {
       std::vector<zmq::message_t> parts;
-      bool res = receive_multipart_safe(*m_socket, parts);
+
+      auto res = zmq::recv_multipart(*m_socket, std::back_inserter(parts));
+
       if (res) {
         // Dealer Recv: [Empty][UUID][Topic][Type][Payload]
         // We expect 5 frames minimum now because Broker sends [ID][Empty][...] and Dealer strips ID.

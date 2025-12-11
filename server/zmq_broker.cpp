@@ -1,6 +1,8 @@
 #include "zmq_broker.h"
 #include "zmq_common.h"
 
+#include <zmq_addon.hpp>
+
 #ifdef _WIN32
 #include <io.h>
 #define unlink _unlink
@@ -8,25 +10,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
-
-// --- HELPER FUNCTION: MANUAL MULTIPART RECEIVE ---
-// Replaces zmq::recv_multipart to avoid dependency on zmq_addon.hpp
-static bool receive_multipart_safe(zmq::socket_t& socket, std::vector<zmq::message_t>& msgs) {
-  msgs.clear();
-  while (true) {
-    zmq::message_t msg;
-    // Use auto to handle different return types (bool vs optional) across cppzmq versions
-    auto res = socket.recv(msg, zmq::recv_flags::none);
-    if (!res)
-      return false;
-    msgs.emplace_back(std::move(msg));
-
-    // Check if there are more frames in this message
-    if (!socket.get(zmq::sockopt::rcvmore))
-      break;
-  }
-  return true;
-}
 
 ZmqBroker::ZmqBroker() : m_ctx(1), m_running(false) {}
 
@@ -102,8 +85,9 @@ void ZmqBroker::brokerLoop() {
     // 1. Handle Local Clients
     if (items[0].revents & ZMQ_POLLIN) {
       std::vector<zmq::message_t> parts;
-      // FIX: Use manual helper
-      bool res = receive_multipart_safe(*m_router, parts);
+
+      auto res = zmq::recv_multipart(*m_router, std::back_inserter(parts));
+
       if (res)
         processMessage(parts, false);
     }
@@ -113,8 +97,9 @@ void ZmqBroker::brokerLoop() {
     for (size_t i = 0; i < m_peers.size(); ++i) {
       if (items[i + 1].revents & ZMQ_POLLIN) {
         std::vector<zmq::message_t> parts;
-        // FIX: Use manual helper
-        bool res = receive_multipart_safe(*m_peers[i], parts);
+
+        auto res = zmq::recv_multipart(*m_peers[i], std::back_inserter(parts));
+
         if (res)
           processMessage(parts, true);
       }
@@ -123,12 +108,10 @@ void ZmqBroker::brokerLoop() {
 }
 
 void ZmqBroker::processMessage(std::vector<zmq::message_t>& parts, bool fromPeer) {
-  std::cout << __FUNCTION__ << std::endl;
   // Expected Format from Router: [Identity][Empty][UUID][Topic][Type][Payload]
   // Expected Format from Dealer(Peer): [UUID][Topic][Type][Payload]
 
   size_t offset = fromPeer ? 0 : 2;
-  std::cout << parts.size() << std::endl;
   if (parts.size() < offset + 4)
     return;
 
@@ -136,8 +119,6 @@ void ZmqBroker::processMessage(std::vector<zmq::message_t>& parts, bool fromPeer
   std::string uuid = parts[offset + 0].to_string();
   std::string topic = parts[offset + 1].to_string();
   std::string type = parts[offset + 2].to_string();
-
-  std::cout << topic << std::endl;
 
   // --- 1. DEDUPLICATION ---
   if (m_seenUuids.count(uuid))

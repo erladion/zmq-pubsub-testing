@@ -21,6 +21,17 @@ endif()
 
 include_directories(common)
 
+add_library(ZmqLib STATIC
+    common/zmq_client_manager.cpp
+    common/zmq_client_manager.h
+    common/zmq_common.h
+)
+
+target_link_libraries(ZmqLib PUBLIC
+    Qt${QT_VERSION_MAJOR}::Core
+    zmq
+)
+
 add_executable(server
   server/main.cpp
   server/zmq_broker.cpp

@@ -20,7 +20,6 @@ endif()
 add_library(ZmqLib STATIC
     ${PROTO_GENERATED_SOURCES}
     ${PROTO_GENERATED_HEADERS}
-    zmq_common.h
     zmqworker.h
     zmqworker.cpp
     zmqconnectionmanager.h

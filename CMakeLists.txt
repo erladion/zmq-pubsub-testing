@@ -9,9 +9,13 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+list(APPEND CMAKE_PREFIX_PATH "/home/erladion/.local/")
+
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
+find_package(Protobuf REQUIRED)
+find_package(absl CONFIG REQUIRED)
 find_package(ZeroMQ QUIET)
 
 if (NOT ZeroMQ_FOUND)
@@ -19,48 +23,21 @@ if (NOT ZeroMQ_FOUND)
     pkg_check_modules(ZeroMQ REQUIRED libzmq)
 endif()
 
+find_library(UTF8_RANGE_LIB
+    NAMES utf8_range utf8_validity
+    PATHS "$ENV{HOME}/.local/lib" "/usr/local/lib" "/usr/lib"
+)
+
+if (NOT UTF8_RANGE_LIB)
+    message(WARNING "Could not find libutf8_range.a! Linker errors may occur.")
+endif()
+
 include_directories(common)
 
-add_library(ZmqLib STATIC
-    common/zmq_client_manager.cpp
-    common/zmq_client_manager.h
-    common/zmq_common.h
-)
-
-target_link_libraries(ZmqLib PUBLIC
-    Qt${QT_VERSION_MAJOR}::Core
-    zmq
-)
-
-add_executable(server
-  server/main.cpp
-  server/zmq_broker.cpp
-  common/zmq_common.h
-  common/zmq_client_manager.h
-  common/zmq_client_manager.cpp
-  zmq.hpp
-)
-target_link_libraries(server Qt${QT_VERSION_MAJOR}::Core zmq)
-
-add_executable(client1
-  client1/main.cpp
-  common/zmq_common.h
-  common/zmq_client_manager.h
-  common/zmq_client_manager.cpp
-  zmq.hpp
-  zmq_addon.hpp
-)
-target_link_libraries(client1 Qt${QT_VERSION_MAJOR}::Core zmq)
-
-add_executable(client2
-  client2/main.cpp
-  common/zmq_common.h
-  common/zmq_client_manager.h
-  common/zmq_client_manager.cpp
-  zmq.hpp
-  zmq_addon.hpp
-)
-target_link_libraries(client2 Qt${QT_VERSION_MAJOR}::Core zmq)
+add_subdirectory(common)
+add_subdirectory(client1)
+add_subdirectory(client2)
+add_subdirectory(server)
 
 include(GNUInstallDirs)
 install(TARGETS server client1 client2

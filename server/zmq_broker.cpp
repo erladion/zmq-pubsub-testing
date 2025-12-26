@@ -1,174 +1,127 @@
 #include "zmq_broker.h"
-#include "zmq_common.h"
+#include <iostream>
 
-#include <zmq_addon.hpp>
-
-#ifdef _WIN32
-#include <io.h>
-#define unlink _unlink
-#else
-#include <sys/stat.h>
-#include <unistd.h>
-#endif
-
-ZmqBroker::ZmqBroker() : m_ctx(1), m_running(false) {}
-
+ZmqBroker::ZmqBroker() : m_running(false), m_context(1) {}
 ZmqBroker::~ZmqBroker() {
   stop();
 }
 
-void ZmqBroker::stop() {
-  m_running = false;
-  if (m_worker.joinable())
-    m_worker.join();
+void ZmqBroker::start(const std::vector<std::string>& bindAddresses) {
+  m_running = true;
+  m_brokerThread = std::thread(&ZmqBroker::run, this, bindAddresses);
 }
 
 void ZmqBroker::run(const std::vector<std::string>& addresses) {
-  if (m_running)
-    return;
-  m_running = true;
+  zmq::socket_t socket(m_context, ZMQ_ROUTER);
+  socket.set(zmq::sockopt::router_mandatory, 1);
 
-  m_router = std::make_unique<zmq::socket_t>(m_ctx, zmq::socket_type::router);
-
-  // Bind logic with Cleanup
   for (const auto& addr : addresses) {
-    if (addr.find("ipc://") == 0) {
-      std::string path = addr.substr(6);
-      unlink(path.c_str());
-    }
-    m_router->bind(addr);
-    std::cout << "[Broker] Bound to: " << addr << std::endl;
-
-    // Fix permissions for UDS
-    if (addr.find("ipc://") == 0) {
-#ifndef _WIN32
-      std::string path = addr.substr(6);
-      chmod(path.c_str(), 0777);
-#endif
+    try {
+      socket.bind(addr);
+      std::cout << "[Broker] Bound to: " << addr << std::endl;
+    } catch (const zmq::error_t& e) {
+      std::cerr << "[Broker] Failed to bind to " << addr << ": " << e.what() << std::endl;
     }
   }
 
-  m_worker = std::thread(&ZmqBroker::brokerLoop, this);
-}
-
-void ZmqBroker::connectToPeer(const std::string& address) {
-  std::lock_guard<std::mutex> lock(m_peerMutex);
-  auto peer = std::make_unique<zmq::socket_t>(m_ctx, zmq::socket_type::dealer);
-
-  // Set identity for the peer connection
-  std::string id = "BrokerPeer-" + std::to_string((uintptr_t)peer.get());
-  peer->set(zmq::sockopt::routing_id, id);
-
-  peer->connect(address);
-  m_peers.push_back(std::move(peer));
-  std::cout << "[Broker] Connected to peer: " << address << std::endl;
-}
-
-void ZmqBroker::brokerLoop() {
+  auto lastCleanup = std::chrono::steady_clock::now();
   while (m_running) {
-    // Poll both local Router and Peer sockets
-    std::vector<zmq::pollitem_t> items;
+    zmq::pollitem_t items[] = {{static_cast<void*>(socket), 0, ZMQ_POLLIN, 0}};
+    zmq::poll(items, 1, std::chrono::milliseconds(20));
 
-    // Item 0: Local Router
-    items.push_back({*m_router, 0, ZMQ_POLLIN, 0});
-
-    // Items 1..N: Peers
-    {
-      std::lock_guard<std::mutex> lock(m_peerMutex);
-      for (auto& p : m_peers) {
-        items.push_back({*p, 0, ZMQ_POLLIN, 0});
-      }
-    }
-
-    zmq::poll(items.data(), items.size(), std::chrono::milliseconds(100));
-
-    // 1. Handle Local Clients
     if (items[0].revents & ZMQ_POLLIN) {
-      std::vector<zmq::message_t> parts;
+      // ROUTER socket receives 3 frames:
+      // 1. Identity (Who sent it)
+      // 2. Empty delimiter (sometimes, depends on ZMQ version/setup)
+      // 3. Data
 
-      auto res = zmq::recv_multipart(*m_router, std::back_inserter(parts));
+      zmq::message_t identity;
+      socket.recv(identity, zmq::recv_flags::none);
 
-      if (res)
-        processMessage(parts, false);
+      zmq::message_t payload;
+      socket.recv(payload, zmq::recv_flags::none);  // Assuming no delimiter for simple Dealer-Router
+
+      std::string senderId = identity.to_string();
+
+      broker::BrokerPayload msg;
+      if (msg.ParseFromArray(payload.data(), payload.size())) {
+        bool isSessionLost = (m_clients.find(senderId) == m_clients.end());
+        {
+          std::lock_guard<std::mutex> lock(m_stateMutex);
+          m_clients[senderId].identity = senderId;
+          m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
+        }
+
+        if (isSessionLost) {
+          std::cout << "[Broker] Detected Reconnected Client: " << senderId << ". Requesting Subscription Reset." << std::endl;
+
+          zmq::message_t outId(senderId.data(), senderId.size());
+
+          broker::BrokerPayload resetMsg;
+          resetMsg.set_handler_key("__RESET__");
+          resetMsg.set_topic("");
+          std::string resetData = resetMsg.SerializeAsString();
+          zmq::message_t outData(resetData.begin(), resetData.end());
+
+          try {
+            socket.send(outId, zmq::send_flags::sndmore);
+            socket.send(outData, zmq::send_flags::none);
+          } catch (...) {
+          }
+        }
+
+        if (msg.handler_key() == "__HEARTBEAT__") {
+        } else if (msg.handler_key() == "__SUBSCRIBE__") {
+          std::lock_guard<std::mutex> lock(m_stateMutex);
+          m_clients[senderId].subscriptions.insert(msg.topic());
+          std::cout << "Client " << senderId << " Subscribed to " << msg.topic() << std::endl;
+        } else {
+          std::cout << "[Broker] Broadcasting topic '" << msg.topic() << "' from " << senderId << std::endl;
+          std::lock_guard<std::mutex> lock(m_stateMutex);
+          for (auto& [id, state] : m_clients) {
+            if (id == senderId) {
+              continue;
+            }
+
+            if (state.subscriptions.count(msg.topic())) {
+              // ROUTER needs 2 sends: ID + Data
+
+              zmq::message_t outId(id.data(), id.size());
+              zmq::message_t outData(payload.data(), payload.size());
+
+              try {
+                socket.send(outId, zmq::send_flags::sndmore);
+                socket.send(outData, zmq::send_flags::none);
+              } catch (const zmq::error_t& e) {
+                state.lastSeen = std::chrono::steady_clock::time_point();
+              }
+            }
+          }
+        }
+      }
     }
 
-    // 2. Handle Peers
-    std::lock_guard<std::mutex> lock(m_peerMutex);
-    for (size_t i = 0; i < m_peers.size(); ++i) {
-      if (items[i + 1].revents & ZMQ_POLLIN) {
-        std::vector<zmq::message_t> parts;
+    auto now = std::chrono::steady_clock::now();
+    if (now - lastCleanup > std::chrono::seconds(2)) {  // Check every 2 seconds
+      std::lock_guard<std::mutex> lock(m_stateMutex);
 
-        auto res = zmq::recv_multipart(*m_peers[i], std::back_inserter(parts));
+      for (auto it = m_clients.begin(); it != m_clients.end();) {
+        auto elapsed = now - it->second.lastSeen;
 
-        if (res)
-          processMessage(parts, true);
+        if (elapsed > CLIENT_TIMEOUT) {
+          std::cout << "[Broker] ☠️ KILLED Zombie Client: " << it->first << " (Inactive for 10s)" << std::endl;
+          it = m_clients.erase(it);
+        } else {
+          ++it;
+        }
       }
+      lastCleanup = now;
     }
   }
 }
 
-void ZmqBroker::processMessage(std::vector<zmq::message_t>& parts, bool fromPeer) {
-  // Expected Format from Router: [Identity][Empty][UUID][Topic][Type][Payload]
-  // Expected Format from Dealer(Peer): [UUID][Topic][Type][Payload]
-
-  size_t offset = fromPeer ? 0 : 2;
-  if (parts.size() < offset + 4)
-    return;
-
-  std::string identity = fromPeer ? "" : parts[0].to_string();
-  std::string uuid = parts[offset + 0].to_string();
-  std::string topic = parts[offset + 1].to_string();
-  std::string type = parts[offset + 2].to_string();
-
-  // --- 1. DEDUPLICATION ---
-  if (m_seenUuids.count(uuid))
-    return;  // Loop detected
-  m_seenUuids.insert(uuid);
-  m_uuidHistory.push_back(uuid);
-  if (m_uuidHistory.size() > 10000) {
-    m_seenUuids.erase(m_uuidHistory.front());
-    m_uuidHistory.pop_front();
-  }
-
-  // --- 2. HANDLE SUBSCRIPTION ---
-  if (type == ZmqProtocol::TYPE_SUB && !fromPeer) {
-    m_subscriptions[topic].insert(identity);
-    std::cout << "[Broker] Client " << identity << " subscribed to " << topic << std::endl;
-    return;  // Don't broadcast subscriptions
-  }
-
-  // --- 3. LOCAL DELIVERY ---
-  if (m_subscriptions.count(topic)) {
-    for (const auto& destId : m_subscriptions[topic]) {
-      // Don't echo back to sender
-      if (!fromPeer && destId == identity)
-        continue;
-
-      // Router Send: [DestID][Empty][UUID][Topic][Type][Payload]
-      m_router->send(zmq::buffer(destId), zmq::send_flags::sndmore);
-      m_router->send(zmq::message_t(), zmq::send_flags::sndmore);  // Delimiter
-
-      // Re-send frames (Copy needed because ZMQ messages move ownership)
-      for (size_t i = offset; i < parts.size(); ++i) {
-        bool more = (i < parts.size() - 1);
-        zmq::message_t copy;
-        copy.copy(parts[i]);
-        m_router->send(copy, more ? zmq::send_flags::sndmore : zmq::send_flags::none);
-      }
-    }
-  }
-
-  // --- 4. BRIDGE FLOODING ---
-  // Forward to all peers (Dealer sends: [UUID][Topic][Type][Payload])
-  {
-    std::lock_guard<std::mutex> lock(m_peerMutex);
-    for (auto& peer : m_peers) {
-      for (size_t i = offset; i < parts.size(); ++i) {
-        bool more = (i < parts.size() - 1);
-        zmq::message_t copy;
-        copy.copy(parts[i]);
-        peer->send(copy, more ? zmq::send_flags::sndmore : zmq::send_flags::none);
-      }
-    }
-  }
+void ZmqBroker::stop() {
+  m_running = false;
+  if (m_brokerThread.joinable())
+    m_brokerThread.join();
 }

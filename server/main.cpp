@@ -9,7 +9,8 @@ int main(int argc, char* argv[]) {
   bindings.push_back("tcp://*:5555");
   bindings.push_back("ipc:///tmp/broker.sock");
 
-  ZmqBroker::instance().run(bindings);
+  ZmqBroker broker;
+  broker.start(bindings);
 
   return a.exec();
 }

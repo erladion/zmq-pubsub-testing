@@ -1,0 +1,10 @@
+add_executable(server
+  main.cpp
+  zmq_broker.cpp
+  ../zmq.hpp
+)
+target_link_libraries(server
+    Qt${QT_VERSION_MAJOR}::Core
+    zmq
+    ZmqLib
+)

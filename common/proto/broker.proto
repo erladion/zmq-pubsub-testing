@@ -1,0 +1,23 @@
+syntax = "proto3";
+package broker;
+
+import "google/protobuf/any.proto";
+
+message BrokerPayload {
+  string handler_key = 1;
+  string sender_id = 2;
+  string topic = 3;
+  google.protobuf.Any payload = 4;
+  string origin_broker_id = 5;
+  string message_uuid = 6;
+
+  string transfer_id = 7;
+  int32 sequence_number = 8;
+  int32 sequence_count = 9;
+  bytes raw_data = 10;
+}
+
+service BrokerService {
+  // Bi-directional stream: One connection, two-way traffic
+  rpc MessageStream (stream BrokerPayload) returns (stream BrokerPayload);
+}

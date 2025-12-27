@@ -26,20 +26,20 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
   auto lastCleanup = std::chrono::steady_clock::now();
   while (m_running) {
-    zmq::pollitem_t items[] = {{static_cast<void*>(socket), 0, ZMQ_POLLIN, 0}};
+    zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
     zmq::poll(items, 1, std::chrono::milliseconds(20));
 
     if (items[0].revents & ZMQ_POLLIN) {
-      // ROUTER socket receives 3 frames:
-      // 1. Identity (Who sent it)
-      // 2. Empty delimiter (sometimes, depends on ZMQ version/setup)
-      // 3. Data
-
       zmq::message_t identity;
       socket.recv(identity, zmq::recv_flags::none);
 
       zmq::message_t payload;
-      socket.recv(payload, zmq::recv_flags::none);  // Assuming no delimiter for simple Dealer-Router
+      socket.recv(payload, zmq::recv_flags::none);
+
+      while (socket.get(zmq::sockopt::rcvmore)) {
+        zmq::message_t trash;
+        socket.recv(trash, zmq::recv_flags::none);
+      }
 
       std::string senderId = identity.to_string();
 

@@ -1,6 +1,6 @@
 add_executable(server
   main.cpp
-  zmq_broker.cpp
+  zmqbroker.cpp
   ../zmq.hpp
 )
 target_link_libraries(server

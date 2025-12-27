@@ -1,4 +1,7 @@
 #include "zmqworker.h"
+
+#include "logger.h"
+
 #include <iostream>
 
 ZmqWorker::ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, StatusCallback statusCb)
@@ -30,7 +33,6 @@ void ZmqWorker::setMessageCallback(MessageCallback callback) {
 }
 
 void ZmqWorker::run() {
-  std::cout << __FUNCTION__ << std::endl;
   zmq::socket_t socket(m_context, ZMQ_DEALER);
 
   socket.set(zmq::sockopt::routing_id, m_config.clientId);
@@ -62,7 +64,7 @@ void ZmqWorker::run() {
             m_messageCallback(payload);
           }
         } else {
-          std::cerr << "[ZmqWorker] ERROR: Failed to parse Protobuf message! Dropping packet." << std::endl;
+          Logger::Log(Logger::ERROR, "Failed to parse Protobuf message! Dropping packet.");
         }
       }
     }

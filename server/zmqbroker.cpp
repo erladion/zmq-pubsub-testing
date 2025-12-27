@@ -1,4 +1,7 @@
 #include "zmq_broker.h"
+
+#include "logger.h"
+
 #include <iostream>
 
 ZmqBroker::ZmqBroker() : m_running(false), m_context(1) {}
@@ -18,9 +21,9 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
   for (const auto& addr : addresses) {
     try {
       socket.bind(addr);
-      std::cout << "[Broker] Bound to: " << addr << std::endl;
+      Logger::Log(Logger::INFO, "Bound to: " + addr);
     } catch (const zmq::error_t& e) {
-      std::cerr << "[Broker] Failed to bind to " << addr << ": " << e.what() << std::endl;
+      Logger::Log(Logger::ERROR, "Failed to bind to " + addr + " : " + e.what());
     }
   }
 
@@ -45,15 +48,15 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
       broker::BrokerPayload msg;
       if (msg.ParseFromArray(payload.data(), payload.size())) {
-        bool isSessionLost = (m_clients.find(senderId) == m_clients.end());
+        bool newClient = (m_clients.find(senderId) == m_clients.end());
         {
           std::lock_guard<std::mutex> lock(m_stateMutex);
           m_clients[senderId].identity = senderId;
           m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
         }
 
-        if (isSessionLost) {
-          std::cout << "[Broker] Detected Reconnected Client: " << senderId << ". Requesting Subscription Reset." << std::endl;
+        if (newClient) {
+          Logger::Log(Logger::INFO, "New client: " + senderId + ". Requesting Subscription Reset");
 
           zmq::message_t outId(senderId.data(), senderId.size());
 
@@ -67,7 +70,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
             socket.send(outId, zmq::send_flags::sndmore);
             socket.send(outData, zmq::send_flags::none);
           } catch (const zmq::error_t& e) {
-            std::cerr << "[Broker] ⚠️ Failed to send RESET to " << senderId << ": " << e.what() << ". Retrying on next message." << std::endl;
+            Logger::Log(Logger::ERROR, "⚠️ Failed to send RESET to " + senderId + " : " + e.what() + ". Retrying on next message");
 
             std::lock_guard<std::mutex> lock(m_stateMutex);
             m_clients.erase(senderId);
@@ -76,7 +79,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
         if (msg.handler_key() == "__CONNECT__") {
           std::lock_guard<std::mutex> lock(m_stateMutex);
-          std::cout << "[Broker] Client " << senderId << " Connected (Session Reset)" << std::endl;
+          Logger::Log(Logger::INFO, "Client " + senderId + " Connected (Session Reset)");
 
           // Wipe old data to ensure a fresh start
           m_clients.erase(senderId);
@@ -86,10 +89,13 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
         } else if (msg.handler_key() == "__HEARTBEAT__") {
         } else if (msg.handler_key() == "__SUBSCRIBE__") {
           std::lock_guard<std::mutex> lock(m_stateMutex);
-          m_clients[senderId].subscriptions.insert(msg.topic());
-          std::cout << "Client " << senderId << " Subscribed to " << msg.topic() << std::endl;
+
+          auto result = m_clients[senderId].subscriptions.insert(msg.topic());
+          if (result.second) {
+            Logger::Log(Logger::INFO, "Client " + senderId + " Subscribed to " + msg.topic());
+          }
         } else {
-          std::cout << "[Broker] Broadcasting topic '" << msg.topic() << "' from " << senderId << std::endl;
+          Logger::Log(Logger::INFO, "Broadcasting topic '" + msg.topic() + "' from " + senderId);
           std::lock_guard<std::mutex> lock(m_stateMutex);
           for (auto& [id, state] : m_clients) {
             if (id == senderId) {
@@ -97,8 +103,6 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
             }
 
             if (state.subscriptions.count(msg.topic())) {
-              // ROUTER needs 2 sends: ID + Data
-
               zmq::message_t outId(id.data(), id.size());
               zmq::message_t outData(payload.data(), payload.size());
 
@@ -122,7 +126,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
         auto elapsed = now - it->second.lastSeen;
 
         if (elapsed > CLIENT_TIMEOUT) {
-          std::cout << "[Broker] ☠️ KILLED Zombie Client: " << it->first << " (Inactive for 10s)" << std::endl;
+          Logger::Log(Logger::INFO, "☠️ KILLED Zombie Client: " + it->first + " (Inactive for 10s)");
           it = m_clients.erase(it);
         } else {
           ++it;

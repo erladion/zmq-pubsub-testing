@@ -15,13 +15,12 @@
 #include <google/protobuf/message.h>
 
 #include "safequeue.h"
-#include "zmqworker.h"  // <--- The new Worker
+#include "zmqworker.h"
 
 using MessageCallback = std::function<void(const std::string&)>;
 using FileCallback = std::function<void(const std::string&)>;
 using StatusCallback = std::function<void(bool)>;
 
-// Reuse your existing struct
 struct FileTransferState {
   std::ofstream fileHandle;
   std::string destFilename;
@@ -42,7 +41,6 @@ public:
   static bool sendDataRaw(const std::string& key, const char* data, int len);
   static bool sendFile(const std::string& key, const std::string& filepath);
 
-  // Template helpers stay exactly the same
   template <typename T>
   static typename std::enable_if<std::is_base_of<google::protobuf::Message, T>::value, bool>::type sendMessage(const std::string& key,
                                                                                                                const T& protobufMessage) {

@@ -1,4 +1,7 @@
 #include "zmqconnectionmanager.h"
+
+#include "logger.h"
+
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -11,7 +14,6 @@ std::vector<std::pair<std::string, MessageCallback>> ZmqConnectionManager::s_pen
 std::vector<std::pair<std::string, FileCallback>> ZmqConnectionManager::s_pendingFileCallbacks;
 std::vector<StatusCallback> ZmqConnectionManager::s_pendingStatusCallbacks;
 
-// OPTIMIZATION: Thread-Local & No-Stream UUID Generation
 static std::string generateUUID() {
   static const char hex_chars[] = "0123456789abcdef";
   thread_local std::random_device rd;
@@ -49,11 +51,13 @@ void ZmqConnectionManager::init(const ConnectionConfig& config) {
     m_instance = new ZmqConnectionManager(config);
 
     // Flush pending callbacks
-    for (auto& p : s_pendingMsgCallbacks)
+    for (auto& p : s_pendingMsgCallbacks) {
       m_instance->registerInternal(p.first, p.second);
+    }
     s_pendingMsgCallbacks.clear();
-    for (auto& p : s_pendingFileCallbacks)
+    for (auto& p : s_pendingFileCallbacks) {
       m_instance->registerFileInternal(p.first, p.second);
+    }
     s_pendingFileCallbacks.clear();
 
     {
@@ -77,21 +81,22 @@ ZmqConnectionManager& ZmqConnectionManager::instance() {
   return *m_instance;
 }
 
-// Forwarders...
 bool ZmqConnectionManager::sendMessage(const std::string& key, const std::string& message) {
   return instance().sendDataInternal(key, message);
 }
+
 bool ZmqConnectionManager::sendData(const std::string& key, const std::string_view& data) {
   return instance().sendDataInternal(key, data);
 }
+
 bool ZmqConnectionManager::sendDataRaw(const std::string& key, const char* data, int len) {
   return instance().sendDataInternal(key, std::string(data, len));
 }
+
 bool ZmqConnectionManager::sendFile(const std::string& key, const std::string& filepath) {
   return instance().sendFileInternal(key, filepath);
 }
 
-// Registration...
 void ZmqConnectionManager::registerCallback(const std::string& key, MessageCallback callback) {
   std::lock_guard<std::mutex> lock(m_initMutex);
   if (m_instance)
@@ -113,11 +118,10 @@ void ZmqConnectionManager::registerStatusCallback(StatusCallback callback) {
     s_pendingStatusCallbacks.push_back(callback);
 }
 
-// CONSTRUCTOR
 ZmqConnectionManager::ZmqConnectionManager(const ConnectionConfig& config) : m_clientId(config.clientId), m_running(true) {
   m_worker = new ZmqWorker(config, &m_queue, [this](bool connected) {
     std::lock_guard<std::mutex> lock(m_mapMutex);
-    std::cout << "[ZMQ Client] Status: " << (connected ? "ONLINE" : "OFFLINE") << std::endl;
+    Logger::Log(Logger::INFO, std::string("Status: ") + (connected ? "ONLINE" : "OFFLINE"));
 
     for (auto& callback : m_statusHandlers) {
       callback(connected);
@@ -130,8 +134,6 @@ ZmqConnectionManager::ZmqConnectionManager(const ConnectionConfig& config) : m_c
       hello.set_topic("");
       m_worker->writeMessage(hello);
 
-      // Re-send subscriptions on connect
-      // ZMQ Dealer queues these if not yet fully connected, which is perfect
       for (auto const& [topic, _] : m_msgHandlers) {
         broker::BrokerPayload sub;
         sub.set_handler_key("__SUBSCRIBE__");
@@ -156,14 +158,15 @@ ZmqConnectionManager::ZmqConnectionManager(const ConnectionConfig& config) : m_c
 ZmqConnectionManager::~ZmqConnectionManager() {
   m_running = false;
   m_queue.stop();
-  if (m_processingThread.joinable())
+  if (m_processingThread.joinable()) {
     m_processingThread.join();
+  }
   delete m_worker;
 }
 
 void ZmqConnectionManager::resubscribeAll() {
   std::lock_guard<std::mutex> lock(m_mapMutex);
-  std::cout << "[ZMQ Manager] Server requested Reset. Re-sending all subscriptions..." << std::endl;
+  Logger::Log(Logger::INFO, "Server requested Reset. Re-sending all subscriptions...");
 
   // Resend Message Subscriptions
   for (auto const& [topic, _] : m_msgHandlers) {
@@ -227,8 +230,6 @@ void ZmqConnectionManager::processingLoop() {
     }
     std::string key = msg.handler_key();
 
-    std::cout << "Got message with key: " << key << std::endl;
-
     if (key == "__RESET__") {
       resubscribeAll();
     } else if (key == "__CHUNK__" || key == "__FILE_META__" || key == "__FILE_FOOTER__") {
@@ -246,20 +247,19 @@ void ZmqConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
   std::vector<MessageCallback> callbacks;
   {
     std::lock_guard<std::mutex> lock(m_mapMutex);
-    auto it = m_msgHandlers.find(topic);  // Optimization: Single lookup
+    auto it = m_msgHandlers.find(topic);
     if (it != m_msgHandlers.end()) {
       callbacks = it->second;
     }
   }
 
   for (auto& callback : callbacks) {
-    // Optimization: Exception Safety
     try {
       callback(data);
     } catch (const std::exception& e) {
-      std::cerr << "[ZMQ Manager] User Callback Exception: " << e.what() << std::endl;
+      Logger::Log(Logger::ERROR, std::string("User Callback Exception: ") + e.what());
     } catch (...) {
-      std::cerr << "[ZMQ Manager] Unknown User Exception" << std::endl;
+      Logger::Log(Logger::ERROR, "Unknown User Exception");
     }
   }
 }
@@ -346,12 +346,13 @@ void ZmqConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
     state->fileHandle.open(state->tempPath, std::ios::binary);
 
     if (!state->fileHandle.is_open()) {
-      std::cerr << "[Manager] Failed to create temp file: " << state->tempPath << std::endl;
+      Logger::Log(Logger::ERROR, "Failed to create temp file: " + state->tempPath);
       return;
     }
 
     m_transfers[id] = state;
-    std::cout << "[Manager] Starting download: " << state->destFilename << std::endl;
+
+    Logger::Log(Logger::INFO, "Starting download: " + state->destFilename);
   }
 
   else if (type == "__CHUNK__") {
@@ -385,7 +386,7 @@ void ZmqConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
       }
       std::filesystem::rename(state->tempPath, finalPath);
 
-      std::cout << "[Manager] File saved to: " << finalPath << std::endl;
+      Logger::Log(Logger::INFO, std::string("File saved to: ") + finalPath.string());
 
       if (m_fileHandlers.count(state->originalTopic)) {
         for (auto& callback : m_fileHandlers[state->originalTopic]) {
@@ -394,7 +395,7 @@ void ZmqConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
       }
 
     } catch (const std::filesystem::filesystem_error& e) {
-      std::cerr << "[Manager] File move failed: " << e.what() << std::endl;
+      Logger::Log(Logger::ERROR, std::string("File move failed: ") + e.what());
     }
 
     m_transfers.erase(id);

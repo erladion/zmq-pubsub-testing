@@ -16,6 +16,7 @@ void ZmqBroker::start(const std::vector<std::string>& bindAddresses) {
 
 void ZmqBroker::run(const std::vector<std::string>& addresses) {
   zmq::socket_t socket(m_context, ZMQ_ROUTER);
+  socket.set(zmq::sockopt::linger, 0);
   socket.set(zmq::sockopt::router_mandatory, 1);
 
   for (const auto& addr : addresses) {

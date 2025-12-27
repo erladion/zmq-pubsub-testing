@@ -34,9 +34,8 @@ void ZmqWorker::setMessageCallback(MessageCallback callback) {
 
 void ZmqWorker::run() {
   zmq::socket_t socket(m_context, ZMQ_DEALER);
-
+  socket.set(zmq::sockopt::linger, 0);
   socket.set(zmq::sockopt::routing_id, m_config.clientId);
-
   socket.connect(m_config.address);
 
   if (m_statusCallback) {

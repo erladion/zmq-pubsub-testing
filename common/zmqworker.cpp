@@ -67,11 +67,13 @@ void ZmqWorker::run() {
       }
     }
 
+    int messagesSent = 0;
     broker::BrokerPayload outbound;
-    while (m_outboundQueue.try_pop(outbound)) {
+    while (messagesSent < 100 && m_outboundQueue.try_pop(outbound)) {
       std::string data = outbound.SerializeAsString();
       zmq::message_t zMsg(data.begin(), data.end());
       socket.send(zMsg, zmq::send_flags::none);
+      messagesSent++;
     }
 
     auto now = std::chrono::steady_clock::now();

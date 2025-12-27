@@ -66,7 +66,11 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           try {
             socket.send(outId, zmq::send_flags::sndmore);
             socket.send(outData, zmq::send_flags::none);
-          } catch (...) {
+          } catch (const zmq::error_t& e) {
+            std::cerr << "[Broker] ⚠️ Failed to send RESET to " << senderId << ": " << e.what() << ". Retrying on next message." << std::endl;
+
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_clients.erase(senderId);
           }
         }
 

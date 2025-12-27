@@ -44,17 +44,16 @@ void ZmqWorker::run() {
   socket.set(zmq::sockopt::routing_id, m_config.clientId);
   socket.connect(m_config.address);
 
-  m_isOnline = false;
-  m_lastRxTime = std::chrono::steady_clock::now();
+  auto lastHeartbeat = std::chrono::steady_clock::now();
   const auto SERVER_TIMEOUT = std::chrono::seconds(10);
+  const auto HEARTBEAT_INTERVAL = std::chrono::seconds(3);
+  auto pollTimeout = std::chrono::milliseconds(20);
+  m_isOnline = false;
+  m_lastRxTime = lastHeartbeat;
 
   if (m_statusCallback) {
     m_statusCallback(true);
   }
-
-  auto pollTimeout = std::chrono::milliseconds(20);
-  auto lastHeartbeat = std::chrono::steady_clock::now();
-  const auto HEARTBEAT_INTERVAL = std::chrono::seconds(3);
 
   while (m_running) {
     zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
@@ -77,7 +76,19 @@ void ZmqWorker::run() {
         if (payload.ParseFromArray(msg.data(), msg.size())) {
           if (payload.handler_key() == Keys::HEARTBEAT_ACK) {
           } else if (m_inboundQueue) {
-            m_inboundQueue->push(payload);
+            bool pushed = false;
+            while (!pushed && m_running) {
+              if (m_inboundQueue->push(std::move(payload), std::chrono::milliseconds(100))) {
+                pushed = true;
+              } else {
+                auto now = std::chrono::steady_clock::now();
+                if (now - lastHeartbeat > HEARTBEAT_INTERVAL) {
+                  sendHeartbeat(socket);
+                  lastHeartbeat = now;
+                }
+              }
+            }
+
           } else if (m_messageCallback) {
             m_messageCallback(payload);
           }
@@ -105,15 +116,7 @@ void ZmqWorker::run() {
 
     auto now = std::chrono::steady_clock::now();
     if (now - lastHeartbeat > HEARTBEAT_INTERVAL) {
-      broker::BrokerPayload hb;
-      hb.set_handler_key(Keys::HEARTBEAT);
-      hb.set_sender_id(m_config.clientId);
-      hb.set_topic("");  // No topic needed
-
-      std::string data = hb.SerializeAsString();
-      zmq::message_t zMsg(data.begin(), data.end());
-      socket.send(zMsg, zmq::send_flags::none);
-
+      sendHeartbeat(socket);
       lastHeartbeat = now;
     }
 
@@ -127,4 +130,15 @@ void ZmqWorker::run() {
   }
 
   socket.close();
+}
+
+void ZmqWorker::sendHeartbeat(zmq::socket_t& socket) {
+  broker::BrokerPayload hb;
+  hb.set_handler_key(Keys::HEARTBEAT);
+  hb.set_sender_id(m_config.clientId);
+  hb.set_topic("");
+
+  std::string data = hb.SerializeAsString();
+  zmq::message_t zMsg(data.begin(), data.end());
+  socket.send(zMsg, zmq::send_flags::none);
 }

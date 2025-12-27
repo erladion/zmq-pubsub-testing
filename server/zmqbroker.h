@@ -28,7 +28,7 @@ private:
   void run(const std::vector<std::string>& addresses);
   void handleMessage(const std::string& senderId, const broker::BrokerPayload& msg);
 
-  bool m_running;
+  std::atomic<bool> m_running;
   std::thread m_brokerThread;
   zmq::context_t m_context;
 

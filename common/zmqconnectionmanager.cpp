@@ -30,18 +30,23 @@ static std::string generateUUID() {
 
   auto set_hex = [&](int index) { uuid[index] = hex_chars[dis(gen)]; };
 
-  for (int i = 0; i < 8; ++i)
+  for (int i = 0; i < 8; ++i) {
     set_hex(i);
-  for (int i = 9; i < 13; ++i)
+  }
+  for (int i = 9; i < 13; ++i) {
     set_hex(i);
+  }
   uuid[14] = '4';
-  for (int i = 15; i < 18; ++i)
+  for (int i = 15; i < 18; ++i) {
     set_hex(i);
+  }
   uuid[19] = hex_chars[dis2(gen)];
-  for (int i = 20; i < 23; ++i)
+  for (int i = 20; i < 23; ++i) {
     set_hex(i);
-  for (int i = 24; i < 36; ++i)
+  }
+  for (int i = 24; i < 36; ++i) {
     set_hex(i);
+  }
 
   return uuid;
 }
@@ -83,18 +88,30 @@ ZmqConnectionManager& ZmqConnectionManager::instance() {
 }
 
 bool ZmqConnectionManager::sendMessage(const std::string& key, const std::string& message) {
+  if (!m_instance) {
+    return false;
+  }
   return instance().sendDataInternal(key, message);
 }
 
 bool ZmqConnectionManager::sendData(const std::string& key, const std::string_view& data) {
+  if (!m_instance) {
+    return false;
+  }
   return instance().sendDataInternal(key, data);
 }
 
 bool ZmqConnectionManager::sendDataRaw(const std::string& key, const char* data, int len) {
+  if (!m_instance) {
+    return false;
+  }
   return instance().sendDataInternal(key, std::string(data, len));
 }
 
 bool ZmqConnectionManager::sendFile(const std::string& key, const std::string& filepath) {
+  if (!m_instance) {
+    return false;
+  }
   return instance().sendFileInternal(key, filepath);
 }
 
@@ -107,6 +124,9 @@ void ZmqConnectionManager::registerCallback(const std::string& key, MessageCallb
 }
 
 void ZmqConnectionManager::registerFileCallback(const std::string& key, FileCallback callback) {
+  if (!m_instance) {
+    return;
+  }
   instance().registerFileInternal(key, callback);
 }
 

@@ -31,6 +31,8 @@ public:
 private:
   void run();
 
+  void sendHeartbeat(zmq::socket_t& socket);
+
   ConnectionConfig m_config;
   SafeQueue<broker::BrokerPayload>* m_inboundQueue;
   StatusCallback m_statusCallback;

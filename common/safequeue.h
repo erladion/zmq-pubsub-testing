@@ -23,6 +23,23 @@ public:
     m_condEmpty.notify_one();
   }
 
+  bool push(T value, std::chrono::milliseconds timeout) {
+    std::unique_lock<std::mutex> lock(m_mutex);
+
+    if(!m_condFull.wait_for(lock, timeout, [this] { return m_queue.size() < m_maxSize || m_stop; })) {
+      return false;
+    }
+
+    if (m_stop) {
+      return false;
+    }
+
+    m_queue.push(std::move(value));
+    m_condEmpty.notify_one();
+    return true;
+  }
+
+
   bool pop(T& value) {
     std::unique_lock<std::mutex> lock(m_mutex);
     m_condEmpty.wait(lock, [this] { return !m_queue.empty() || m_stop; });

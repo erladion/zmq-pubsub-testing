@@ -24,7 +24,7 @@ add_library(ZmqLib STATIC
     zmqworker.cpp
     zmqconnectionmanager.h
     zmqconnectionmanager.cpp
-    zmqconnectionapi.h
+    connectionapi.h
     zmqconnectionapi.cpp
     logger.h
     messagekeys.h

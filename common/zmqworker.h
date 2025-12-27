@@ -25,6 +25,7 @@ public:
   void start();
   void stop();
   bool writeMessage(const broker::BrokerPayload& msg);
+  bool writeControlMessage(const broker::BrokerPayload& msg);
   void setMessageCallback(MessageCallback callback);
 
 private:
@@ -38,10 +39,9 @@ private:
   std::atomic<bool> m_running;
   std::thread m_workerThread;
 
-  // ZMQ Context must be thread-safe (usually one per process, but here one per worker is fine for isolation)
   zmq::context_t m_context;
-  // Socket is NOT thread safe, accessed only in run()
-  // We use a thread-safe queue to pass outgoing messages to the worker thread
+
+  SafeQueue<broker::BrokerPayload> m_controlQueue;
   SafeQueue<broker::BrokerPayload> m_outboundQueue;
 };
 

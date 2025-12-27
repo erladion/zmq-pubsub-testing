@@ -28,6 +28,11 @@ bool ZmqWorker::writeMessage(const broker::BrokerPayload& msg) {
   return true;
 }
 
+bool ZmqWorker::writeControlMessage(const broker::BrokerPayload& msg) {
+  m_controlQueue.push(msg);
+  return true;
+}
+
 void ZmqWorker::setMessageCallback(MessageCallback callback) {
   m_messageCallback = callback;
 }
@@ -68,8 +73,15 @@ void ZmqWorker::run() {
       }
     }
 
-    int messagesSent = 0;
     broker::BrokerPayload outbound;
+
+    while (m_controlQueue.try_pop(outbound)) {
+      std::string data = outbound.SerializeAsString();
+      zmq::message_t zMsg(data.begin(), data.end());
+      socket.send(zMsg, zmq::send_flags::none);
+    }
+
+    int messagesSent = 0;
     while (messagesSent < 100 && m_outboundQueue.try_pop(outbound)) {
       std::string data = outbound.SerializeAsString();
       zmq::message_t zMsg(data.begin(), data.end());

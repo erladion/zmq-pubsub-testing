@@ -188,6 +188,12 @@ void ZmqConnectionManager::resubscribeAll() {
 }
 
 bool ZmqConnectionManager::sendRawEnvelope(const broker::BrokerPayload& envelope) {
+  std::string key = envelope.handler_key();
+
+  if (key == "__HEARTBEAT__" || key == "__SUBSCRIBE__" || key == "__CONNECT__" || key == "__RESET__") {
+    return m_worker->writeControlMessage(envelope);
+  }
+
   return m_worker->writeMessage(envelope);
 }
 

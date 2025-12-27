@@ -1,6 +1,6 @@
 #include <QCoreApplication>
 
-#include "zmq_broker.h"
+#include "zmqbroker.h"
 
 int main(int argc, char* argv[]) {
   QCoreApplication a(argc, argv);

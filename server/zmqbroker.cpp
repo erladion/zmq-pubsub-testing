@@ -1,6 +1,7 @@
-#include "zmq_broker.h"
+#include "zmqbroker.h"
 
 #include "logger.h"
+#include "messagekeys.h"
 
 #include <iostream>
 
@@ -62,7 +63,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           zmq::message_t outId(senderId.data(), senderId.size());
 
           broker::BrokerPayload resetMsg;
-          resetMsg.set_handler_key("__RESET__");
+          resetMsg.set_handler_key(Keys::RESET);
           resetMsg.set_topic("");
           std::string resetData = resetMsg.SerializeAsString();
           zmq::message_t outData(resetData.begin(), resetData.end());
@@ -78,7 +79,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           }
         }
 
-        if (msg.handler_key() == "__CONNECT__") {
+        if (msg.handler_key() == Keys::CONNECT) {
           std::lock_guard<std::mutex> lock(m_stateMutex);
           Logger::Log(Logger::INFO, "Client " + senderId + " Connected (Session Reset)");
 
@@ -87,11 +88,11 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
           m_clients[senderId].identity = senderId;
           m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
-        } else if (msg.handler_key() == "__HEARTBEAT__") {
+        } else if (msg.handler_key() == Keys::HEARTBEAT) {
           zmq::message_t outId(senderId.data(), senderId.size());
 
           broker::BrokerPayload ack;
-          ack.set_handler_key("__HEARTBEAT_ACK__");
+          ack.set_handler_key(Keys::HEARTBEAT_ACK);
           ack.set_topic("");
           std::string ackData = ack.SerializeAsString();
           zmq::message_t outData(ackData.begin(), ackData.end());
@@ -101,7 +102,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
             socket.send(outData, zmq::send_flags::none);
           } catch (...) {
           }
-        } else if (msg.handler_key() == "__SUBSCRIBE__") {
+        } else if (msg.handler_key() == Keys::SUBSCRIBE) {
           std::lock_guard<std::mutex> lock(m_stateMutex);
 
           auto result = m_clients[senderId].subscriptions.insert(msg.topic());

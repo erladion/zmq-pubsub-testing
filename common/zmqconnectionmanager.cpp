@@ -1,6 +1,7 @@
 #include "zmqconnectionmanager.h"
 
 #include "logger.h"
+#include "messagekeys.h"
 
 #include <filesystem>
 #include <fstream>
@@ -129,21 +130,21 @@ ZmqConnectionManager::ZmqConnectionManager(const ConnectionConfig& config) : m_c
 
     if (connected) {
       broker::BrokerPayload hello;
-      hello.set_handler_key("__CONNECT__");
+      hello.set_handler_key(Keys::CONNECT);
       hello.set_sender_id(m_clientId);
       hello.set_topic("");
       m_worker->writeMessage(hello);
 
       for (auto const& [topic, _] : m_msgHandlers) {
         broker::BrokerPayload sub;
-        sub.set_handler_key("__SUBSCRIBE__");
+        sub.set_handler_key(Keys::SUBSCRIBE);
         sub.set_sender_id(m_clientId);
         sub.set_topic(topic);
         m_worker->writeMessage(sub);
       }
       for (auto const& [topic, _] : m_fileHandlers) {
         broker::BrokerPayload sub;
-        sub.set_handler_key("__SUBSCRIBE__");
+        sub.set_handler_key(Keys::SUBSCRIBE);
         sub.set_sender_id(m_clientId);
         sub.set_topic(topic);
         m_worker->writeMessage(sub);
@@ -171,7 +172,7 @@ void ZmqConnectionManager::resubscribeAll() {
   // Resend Message Subscriptions
   for (auto const& [topic, _] : m_msgHandlers) {
     broker::BrokerPayload sub;
-    sub.set_handler_key("__SUBSCRIBE__");
+    sub.set_handler_key(Keys::SUBSCRIBE);
     sub.set_sender_id(m_clientId);
     sub.set_topic(topic);
     sendRawEnvelope(sub);
@@ -180,7 +181,7 @@ void ZmqConnectionManager::resubscribeAll() {
   // Resend File Subscriptions
   for (auto const& [topic, _] : m_fileHandlers) {
     broker::BrokerPayload sub;
-    sub.set_handler_key("__SUBSCRIBE__");
+    sub.set_handler_key(Keys::SUBSCRIBE);
     sub.set_sender_id(m_clientId);
     sub.set_topic(topic);
     sendRawEnvelope(sub);
@@ -190,7 +191,7 @@ void ZmqConnectionManager::resubscribeAll() {
 bool ZmqConnectionManager::sendRawEnvelope(const broker::BrokerPayload& envelope) {
   std::string key = envelope.handler_key();
 
-  if (key == "__HEARTBEAT__" || key == "__SUBSCRIBE__" || key == "__CONNECT__" || key == "__RESET__") {
+  if (Keys::isControlMessage(key)) {
     return m_worker->writeControlMessage(envelope);
   }
 
@@ -211,7 +212,7 @@ void ZmqConnectionManager::registerInternal(const std::string& key, MessageCallb
   m_msgHandlers[key].push_back(callback);
 
   broker::BrokerPayload sub;
-  sub.set_handler_key("__SUBSCRIBE__");
+  sub.set_handler_key(Keys::SUBSCRIBE);
   sub.set_sender_id(m_clientId);
   sub.set_topic(key);
   sendRawEnvelope(sub);
@@ -222,7 +223,7 @@ void ZmqConnectionManager::registerFileInternal(const std::string& key, FileCall
   m_fileHandlers[key].push_back(callback);
 
   broker::BrokerPayload sub;
-  sub.set_handler_key("__SUBSCRIBE__");
+  sub.set_handler_key(Keys::SUBSCRIBE);
   sub.set_sender_id(m_clientId);
   sub.set_topic(key);
   sendRawEnvelope(sub);
@@ -236,9 +237,9 @@ void ZmqConnectionManager::processingLoop() {
     }
     std::string key = msg.handler_key();
 
-    if (key == "__RESET__") {
+    if (key == Keys::RESET) {
       resubscribeAll();
-    } else if (key == "__CHUNK__" || key == "__FILE_META__" || key == "__FILE_FOOTER__") {
+    } else if (Keys::isFilePacket(key)) {
       handleFilePacket(msg);
     } else {
       handleMessage(msg);
@@ -290,7 +291,7 @@ bool ZmqConnectionManager::sendFileInternal(const std::string& key, const std::s
     metaJson << "{\"filename\":\"" << filename << "\",\"size\":" << fileSize << "}";
 
     broker::BrokerPayload metaMsg;
-    metaMsg.set_handler_key("__FILE_META__");
+    metaMsg.set_handler_key(Keys::FILE_META);
     metaMsg.set_topic(key);
     metaMsg.set_sender_id(m_clientId);
     metaMsg.set_transfer_id(transferId);
@@ -305,7 +306,7 @@ bool ZmqConnectionManager::sendFileInternal(const std::string& key, const std::s
 
     while (inputFile.read(buffer.data(), CHUNK_SIZE) || inputFile.gcount() > 0) {
       broker::BrokerPayload chunkMsg;
-      chunkMsg.set_handler_key("__CHUNK__");
+      chunkMsg.set_handler_key(Keys::FILE_CHUNK);
       chunkMsg.set_topic(key);
       chunkMsg.set_sender_id(m_clientId);
       chunkMsg.set_transfer_id(transferId);
@@ -314,7 +315,7 @@ bool ZmqConnectionManager::sendFileInternal(const std::string& key, const std::s
     }
 
     broker::BrokerPayload footerMsg;
-    footerMsg.set_handler_key("__FILE_FOOTER__");
+    footerMsg.set_handler_key(Keys::FILE_FOOTER);
     footerMsg.set_topic(key);
     footerMsg.set_sender_id(m_clientId);
     footerMsg.set_transfer_id(transferId);
@@ -330,7 +331,7 @@ void ZmqConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
 
   std::lock_guard<std::mutex> lock(m_mapMutex);
 
-  if (type == "__FILE_META__") {
+  if (type == Keys::FILE_META) {
     auto state = std::make_shared<FileTransferState>();
     state->originalTopic = msg.topic();
     state->receivedSize = 0;
@@ -361,7 +362,7 @@ void ZmqConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
     Logger::Log(Logger::INFO, "Starting download: " + state->destFilename);
   }
 
-  else if (type == "__CHUNK__") {
+  else if (type == Keys::FILE_CHUNK) {
     if (m_transfers.find(id) == m_transfers.end()) {
       return;
     }
@@ -371,7 +372,7 @@ void ZmqConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
     state->receivedSize += msg.raw_data().size();
   }
 
-  else if (type == "__FILE_FOOTER__") {
+  else if (type == Keys::FILE_FOOTER) {
     if (m_transfers.find(id) == m_transfers.end()) {
       return;
     }

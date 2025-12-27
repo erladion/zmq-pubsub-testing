@@ -27,6 +27,7 @@ add_library(ZmqLib STATIC
     zmqconnectionapi.h
     zmqconnectionapi.cpp
     logger.h
+    messagekeys.h
 )
 
 target_include_directories(ZmqLib PUBLIC generated)

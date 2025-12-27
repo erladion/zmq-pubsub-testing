@@ -1,6 +1,7 @@
 #include "zmqworker.h"
 
 #include "logger.h"
+#include "messagekeys.h"
 
 #include <iostream>
 
@@ -74,7 +75,7 @@ void ZmqWorker::run() {
 
         broker::BrokerPayload payload;
         if (payload.ParseFromArray(msg.data(), msg.size())) {
-          if (payload.handler_key() == "__HEARTBEAT_ACK__") {
+          if (payload.handler_key() == Keys::HEARTBEAT_ACK) {
           } else if (m_inboundQueue) {
             m_inboundQueue->push(payload);
           } else if (m_messageCallback) {
@@ -105,7 +106,7 @@ void ZmqWorker::run() {
     auto now = std::chrono::steady_clock::now();
     if (now - lastHeartbeat > HEARTBEAT_INTERVAL) {
       broker::BrokerPayload hb;
-      hb.set_handler_key("__HEARTBEAT__");
+      hb.set_handler_key(Keys::HEARTBEAT);
       hb.set_sender_id(m_config.clientId);
       hb.set_topic("");  // No topic needed
 

@@ -264,60 +264,139 @@ void ZmqConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
   }
 }
 
-// Logic is identical to Grpc, just uses m_worker->writeMessage
 bool ZmqConnectionManager::sendFileInternal(const std::string& key, const std::string& filePath) {
-  std::filesystem::path path(filePath);
-  if (!std::filesystem::exists(path))
-    return false;
-
-  std::string filename = path.filename().string();
-  size_t fileSize = std::filesystem::file_size(path);
-  std::string transferId = generateUUID();
-
-  std::ifstream inputFile(filePath, std::ios::binary);
-  if (!inputFile.is_open()) {
+  if (!std::filesystem::exists(filePath)) {
     return false;
   }
 
-  std::stringstream metaJson;
-  metaJson << "{\"filename\":\"" << filename << "\",\"size\":" << fileSize << "}";
+  std::thread([this, key, filePath]() {
+    std::filesystem::path path(filePath);
+    std::string filename = path.filename().string();
+    size_t fileSize = std::filesystem::file_size(path);
+    std::string transferId = generateUUID();
 
-  broker::BrokerPayload metaMsg;
-  metaMsg.set_handler_key("__FILE_META__");
-  metaMsg.set_topic(key);
-  metaMsg.set_sender_id(m_clientId);
-  metaMsg.set_transfer_id(transferId);
-  metaMsg.set_raw_data(metaJson.str());
+    std::ifstream inputFile(filePath, std::ios::binary);
+    if (!inputFile.is_open()) {
+      return false;
+    }
 
-  if (!m_worker->writeMessage(metaMsg)) {
-    return false;
-  }
+    std::stringstream metaJson;
+    metaJson << "{\"filename\":\"" << filename << "\",\"size\":" << fileSize << "}";
 
-  const size_t CHUNK_SIZE = 64 * 1024;
-  std::vector<char> buffer(CHUNK_SIZE);
+    broker::BrokerPayload metaMsg;
+    metaMsg.set_handler_key("__FILE_META__");
+    metaMsg.set_topic(key);
+    metaMsg.set_sender_id(m_clientId);
+    metaMsg.set_transfer_id(transferId);
+    metaMsg.set_raw_data(metaJson.str());
 
-  while (inputFile.read(buffer.data(), CHUNK_SIZE) || inputFile.gcount() > 0) {
-    broker::BrokerPayload chunkMsg;
-    chunkMsg.set_handler_key("__CHUNK__");
-    chunkMsg.set_topic(key);
-    chunkMsg.set_sender_id(m_clientId);
-    chunkMsg.set_transfer_id(transferId);
-    chunkMsg.set_raw_data(buffer.data(), inputFile.gcount());
-    m_worker->writeMessage(chunkMsg);
-  }
+    if (!m_worker->writeMessage(metaMsg)) {
+      return false;
+    }
 
-  broker::BrokerPayload footerMsg;
-  footerMsg.set_handler_key("__FILE_FOOTER__");
-  footerMsg.set_topic(key);
-  footerMsg.set_sender_id(m_clientId);
-  footerMsg.set_transfer_id(transferId);
-  m_worker->writeMessage(footerMsg);
+    const size_t CHUNK_SIZE = 64 * 1024;
+    std::vector<char> buffer(CHUNK_SIZE);
+
+    while (inputFile.read(buffer.data(), CHUNK_SIZE) || inputFile.gcount() > 0) {
+      broker::BrokerPayload chunkMsg;
+      chunkMsg.set_handler_key("__CHUNK__");
+      chunkMsg.set_topic(key);
+      chunkMsg.set_sender_id(m_clientId);
+      chunkMsg.set_transfer_id(transferId);
+      chunkMsg.set_raw_data(buffer.data(), inputFile.gcount());
+      m_worker->writeMessage(chunkMsg);
+    }
+
+    broker::BrokerPayload footerMsg;
+    footerMsg.set_handler_key("__FILE_FOOTER__");
+    footerMsg.set_topic(key);
+    footerMsg.set_sender_id(m_clientId);
+    footerMsg.set_transfer_id(transferId);
+    m_worker->writeMessage(footerMsg);
+  }).detach();
 
   return true;
 }
 
 void ZmqConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
-  // ... Copy exact logic from GrpcConnectionManager::handleFilePacket ...
-  // (It is transport agnostic, just filesystem work)
-  // See your previous upload for the implementation of this method.
+  std::string type = msg.handler_key();
+  std::string id = msg.transfer_id();
+
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+
+  if (type == "__FILE_META__") {
+    auto state = std::make_shared<FileTransferState>();
+    state->originalTopic = msg.topic();
+    state->receivedSize = 0;
+
+    std::string meta = msg.raw_data();
+
+    size_t nameStart = meta.find("\"filename\":\"");
+    if (nameStart != std::string::npos) {
+      nameStart += 12;
+      size_t nameEnd = meta.find("\"", nameStart);
+      state->destFilename = meta.substr(nameStart, nameEnd - nameStart);
+    } else {
+      state->destFilename = "unknown_" + id + ".bin";
+    }
+
+    state->destFilename = std::filesystem::path(state->destFilename).filename().string();
+
+    state->tempPath = (std::filesystem::temp_directory_path() / (id + ".part")).string();
+    state->fileHandle.open(state->tempPath, std::ios::binary);
+
+    if (!state->fileHandle.is_open()) {
+      std::cerr << "[Manager] Failed to create temp file: " << state->tempPath << std::endl;
+      return;
+    }
+
+    m_transfers[id] = state;
+    std::cout << "[Manager] Starting download: " << state->destFilename << std::endl;
+  }
+
+  else if (type == "__CHUNK__") {
+    if (m_transfers.find(id) == m_transfers.end()) {
+      return;
+    }
+
+    auto& state = m_transfers[id];
+    state->fileHandle.write(msg.raw_data().data(), msg.raw_data().size());
+    state->receivedSize += msg.raw_data().size();
+  }
+
+  else if (type == "__FILE_FOOTER__") {
+    if (m_transfers.find(id) == m_transfers.end()) {
+      return;
+    }
+
+    auto state = m_transfers[id];
+    state->fileHandle.close();
+
+    std::filesystem::path downloadDir = std::filesystem::current_path() / "downloads";
+    if (!std::filesystem::exists(downloadDir)) {
+      std::filesystem::create_directory(downloadDir);
+    }
+
+    std::filesystem::path finalPath = downloadDir / state->destFilename;
+
+    try {
+      if (std::filesystem::exists(finalPath)) {
+        std::filesystem::remove(finalPath);
+      }
+      std::filesystem::rename(state->tempPath, finalPath);
+
+      std::cout << "[Manager] File saved to: " << finalPath << std::endl;
+
+      if (m_fileHandlers.count(state->originalTopic)) {
+        for (auto& callback : m_fileHandlers[state->originalTopic]) {
+          callback(finalPath.string());
+        }
+      }
+
+    } catch (const std::filesystem::filesystem_error& e) {
+      std::cerr << "[Manager] File move failed: " << e.what() << std::endl;
+    }
+
+    m_transfers.erase(id);
+  }
 }

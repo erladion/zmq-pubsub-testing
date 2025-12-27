@@ -119,10 +119,17 @@ ZmqConnectionManager::ZmqConnectionManager(const ConnectionConfig& config) : m_c
     std::lock_guard<std::mutex> lock(m_mapMutex);
     std::cout << "[ZMQ Client] Status: " << (connected ? "ONLINE" : "OFFLINE") << std::endl;
 
-    for (auto& callback : m_statusHandlers)
+    for (auto& callback : m_statusHandlers) {
       callback(connected);
+    }
 
     if (connected) {
+      broker::BrokerPayload hello;
+      hello.set_handler_key("__CONNECT__");
+      hello.set_sender_id(m_clientId);
+      hello.set_topic("");
+      m_worker->writeMessage(hello);
+
       // Re-send subscriptions on connect
       // ZMQ Dealer queues these if not yet fully connected, which is perfect
       for (auto const& [topic, _] : m_msgHandlers) {

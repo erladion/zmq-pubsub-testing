@@ -74,7 +74,16 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           }
         }
 
-        if (msg.handler_key() == "__HEARTBEAT__") {
+        if (msg.handler_key() == "__CONNECT__") {
+          std::lock_guard<std::mutex> lock(m_stateMutex);
+          std::cout << "[Broker] Client " << senderId << " Connected (Session Reset)" << std::endl;
+
+          // Wipe old data to ensure a fresh start
+          m_clients.erase(senderId);
+
+          m_clients[senderId].identity = senderId;
+          m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
+        } else if (msg.handler_key() == "__HEARTBEAT__") {
         } else if (msg.handler_key() == "__SUBSCRIBE__") {
           std::lock_guard<std::mutex> lock(m_stateMutex);
           m_clients[senderId].subscriptions.insert(msg.topic());

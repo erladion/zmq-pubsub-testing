@@ -43,6 +43,9 @@ private:
 
   SafeQueue<broker::BrokerPayload> m_controlQueue;
   SafeQueue<broker::BrokerPayload> m_outboundQueue;
+
+  bool m_isOnline = false;
+  std::chrono::steady_clock::time_point m_lastRxTime;
 };
 
 #endif  // ZMQWORKER_H

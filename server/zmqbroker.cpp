@@ -88,6 +88,19 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           m_clients[senderId].identity = senderId;
           m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
         } else if (msg.handler_key() == "__HEARTBEAT__") {
+          zmq::message_t outId(senderId.data(), senderId.size());
+
+          broker::BrokerPayload ack;
+          ack.set_handler_key("__HEARTBEAT_ACK__");
+          ack.set_topic("");
+          std::string ackData = ack.SerializeAsString();
+          zmq::message_t outData(ackData.begin(), ackData.end());
+
+          try {
+            socket.send(outId, zmq::send_flags::sndmore);
+            socket.send(outData, zmq::send_flags::none);
+          } catch (...) {
+          }
         } else if (msg.handler_key() == "__SUBSCRIBE__") {
           std::lock_guard<std::mutex> lock(m_stateMutex);
 

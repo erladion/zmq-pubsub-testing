@@ -43,6 +43,10 @@ void ZmqWorker::run() {
   socket.set(zmq::sockopt::routing_id, m_config.clientId);
   socket.connect(m_config.address);
 
+  m_isOnline = false;
+  m_lastRxTime = std::chrono::steady_clock::now();
+  const auto SERVER_TIMEOUT = std::chrono::seconds(10);
+
   if (m_statusCallback) {
     m_statusCallback(true);
   }
@@ -58,11 +62,20 @@ void ZmqWorker::run() {
 
     if (items[0].revents & ZMQ_POLLIN) {
       zmq::message_t msg;
-      auto res = socket.recv(msg, zmq::recv_flags::none);
-      if (res) {
+      if (socket.recv(msg, zmq::recv_flags::none)) {
+        m_lastRxTime = std::chrono::steady_clock::now();
+
+        if (!m_isOnline) {
+          m_isOnline = true;
+          if (m_statusCallback) {
+            m_statusCallback(true);
+          }
+        }
+
         broker::BrokerPayload payload;
         if (payload.ParseFromArray(msg.data(), msg.size())) {
-          if (m_inboundQueue) {
+          if (payload.handler_key() == "__HEARTBEAT_ACK__") {
+          } else if (m_inboundQueue) {
             m_inboundQueue->push(payload);
           } else if (m_messageCallback) {
             m_messageCallback(payload);
@@ -101,6 +114,14 @@ void ZmqWorker::run() {
       socket.send(zMsg, zmq::send_flags::none);
 
       lastHeartbeat = now;
+    }
+
+    if (m_isOnline && (now - m_lastRxTime > SERVER_TIMEOUT)) {
+      Logger::Log(Logger::ERROR, "Server timed out! Switching to OFFLINE.");
+      m_isOnline = false;
+      if (m_statusCallback) {
+        m_statusCallback(false);
+      }
     }
   }
 

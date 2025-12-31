@@ -34,7 +34,7 @@ struct FileTransferState {
   size_t receivedSize;
 };
 
-class ConnectionManager {
+class ConnectionManager : public std::enable_shared_from_this<ConnectionManager> {
 public:
   static void init(const ConnectionConfig& config);
   static void shutdown();
@@ -106,7 +106,7 @@ private:
   void handleFilePacket(const broker::BrokerPayload& msg);
 
 private:
-  static ConnectionManager* m_instance;
+  static std::shared_ptr<ConnectionManager> m_instance;
   static std::mutex m_initMutex;
 
   std::string m_clientId;

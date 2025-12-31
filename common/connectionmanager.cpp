@@ -11,7 +11,7 @@
 
 using namespace std::string_literals;
 
-ConnectionManager* ConnectionManager::m_instance = nullptr;
+std::shared_ptr<ConnectionManager> ConnectionManager::m_instance = nullptr;
 std::mutex ConnectionManager::m_initMutex;
 
 std::vector<std::pair<std::string, MessageCallback>> ConnectionManager::s_pendingMsgCallbacks;
@@ -54,7 +54,7 @@ static std::string generateUUID() {
 void ConnectionManager::init(const ConnectionConfig& config) {
   std::lock_guard<std::mutex> lock(m_initMutex);
   if (!m_instance) {
-    m_instance = new ConnectionManager(config);
+    m_instance = std::shared_ptr<ConnectionManager>(new ConnectionManager(config), [](ConnectionManager* ptr) { delete ptr; });
 
     // Flush pending callbacks
     for (auto& p : s_pendingMsgCallbacks) {
@@ -80,8 +80,8 @@ void ConnectionManager::init(const ConnectionConfig& config) {
 void ConnectionManager::shutdown() {
   std::lock_guard<std::mutex> lock(m_initMutex);
   if (m_instance) {
-    delete m_instance;
-    m_instance = nullptr;
+    m_instance->m_running = false;
+    m_instance.reset();
   }
 }
 
@@ -337,7 +337,7 @@ bool ConnectionManager::sendFileInternal(const std::string& key, const std::stri
     return false;
   }
 
-  std::thread([this, key, filePath]() {
+  std::thread([self = shared_from_this(), key, filePath]() {
     std::filesystem::path path(filePath);
     std::string filename = path.filename().string();
     size_t fileSize = std::filesystem::file_size(path);
@@ -354,11 +354,11 @@ bool ConnectionManager::sendFileInternal(const std::string& key, const std::stri
     broker::BrokerPayload metaMsg;
     metaMsg.set_handler_key(std::string(Keys::FILE_META));
     metaMsg.set_topic(key);
-    metaMsg.set_sender_id(m_clientId);
+    metaMsg.set_sender_id(self->m_clientId);
     metaMsg.set_transfer_id(transferId);
     metaMsg.set_raw_data(metaJson.str());
 
-    if (!sendRawEnvelope(metaMsg)) {
+    if (!self->sendRawEnvelope(metaMsg)) {
       return;
     }
 
@@ -366,21 +366,25 @@ bool ConnectionManager::sendFileInternal(const std::string& key, const std::stri
     std::vector<char> buffer(CHUNK_SIZE);
 
     while (inputFile.read(buffer.data(), CHUNK_SIZE) || inputFile.gcount() > 0) {
+      if (!self->m_running) {
+        return;
+      }
+
       broker::BrokerPayload chunkMsg;
       chunkMsg.set_handler_key(std::string(Keys::FILE_CHUNK));
       chunkMsg.set_topic(key);
-      chunkMsg.set_sender_id(m_clientId);
+      chunkMsg.set_sender_id(self->m_clientId);
       chunkMsg.set_transfer_id(transferId);
       chunkMsg.set_raw_data(buffer.data(), inputFile.gcount());
-      sendRawEnvelope(chunkMsg);
+      self->sendRawEnvelope(chunkMsg);
     }
 
     broker::BrokerPayload footerMsg;
     footerMsg.set_handler_key(std::string(Keys::FILE_FOOTER));
     footerMsg.set_topic(key);
-    footerMsg.set_sender_id(m_clientId);
+    footerMsg.set_sender_id(self->m_clientId);
     footerMsg.set_transfer_id(transferId);
-    sendRawEnvelope(footerMsg);
+    self->sendRawEnvelope(footerMsg);
   }).detach();
 
   return true;

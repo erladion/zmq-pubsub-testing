@@ -29,6 +29,7 @@ add_library(ZmqLib STATIC
     workerinterface.h
     connectionmanager.h
     connectionmanager.cpp
+    config.h
 )
 
 target_include_directories(ZmqLib PUBLIC generated)

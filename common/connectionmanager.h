@@ -16,6 +16,7 @@
 #include <google/protobuf/any.pb.h>
 #include <google/protobuf/message.h>
 
+#include "config.h"
 #include "logger.h"
 #include "safequeue.h"
 #include "workerinterface.h"
@@ -31,18 +32,6 @@ struct FileTransferState {
   std::string originalTopic;
   size_t totalSize;
   size_t receivedSize;
-};
-
-enum class ProtocolType { ZMQ, GRPC };
-
-struct ConnectionConfig {
-  std::string address;
-  std::string clientId;
-  ProtocolType protocol = ProtocolType::ZMQ;
-
-  int keepAliveTime = 10000;
-  int keepAliveTimeout = 5000;
-  int compressionAlgorithm = 2;  // GZIP
 };
 
 class ConnectionManager {

@@ -10,7 +10,7 @@
 
 #include "broker.pb.h"
 
-#include "connectionmanager.h"
+#include "config.h"
 #include "safequeue.h"
 #include "workerinterface.h"
 

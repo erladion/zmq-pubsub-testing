@@ -15,6 +15,8 @@ extern "C" {
 #define CONN_API
 #endif
 
+typedef enum { PROTOCOL_ZMQ = 0, PROTOCOL_GRPC = 1 } Connection_Protocol;
+
 typedef enum { SUCCESS = 0, ERROR_GENERIC = -1, ERROR_NO_CONNECTION = -2, ERROR_INVALID_ARGS = -3, ERROR_SEND_FAILED = -4 } Connection_Error_Code;
 
 typedef enum { STATUS_DISCONNECTED = 0, STATUS_CONNECTING = 1, STATUS_CONNECTED = 2 } Connection_Status;
@@ -22,17 +24,19 @@ typedef enum { STATUS_DISCONNECTED = 0, STATUS_CONNECTING = 1, STATUS_CONNECTED 
 typedef enum { COMPRESS_NONE = 0, COMPRESS_DEFLATE = 1, COMPRESS_GZIP = 2 } Compression_Algorithm;
 
 typedef struct {
-  const char* address;       // e.g. "tcp://127.0.0.1:5555"
-  const char* client_id;     // e.g. "Camera-1"
+  const char* address;    // e.g. "tcp://127.0.0.1:5555"
+  const char* client_id;  // e.g. "Camera-1"
+
+  Connection_Protocol protocol;
+
   int keepalive_time_ms;     // Default: 10000
   int keepalive_timeout_ms;  // Default: 5000
   Compression_Algorithm compression_algorithm;
 } Connection_Config;
 
 #define CONNECTION_CONFIG_DEFAULT \
-  { .address = NULL, .client_id = NULL, .keepalive_time_ms = 10000, .keepalive_timeout_ms = 5000, .compression_algorithm = 2 }
+  { NULL, NULL, PROTOCOL_ZMQ, 10000, 5000, COMPRESS_GZIP }
 
-// Callback Typedefs (Renamed)
 typedef void (*Message_Callback)(const char* topic, const char* data, int len, void* userData);
 typedef void (*File_Callback)(const char* topic, const char* filepath, void* userData);
 typedef void (*Status_Callback)(Connection_Status status, void* userData);

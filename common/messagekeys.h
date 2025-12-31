@@ -21,7 +21,7 @@ constexpr bool isSystemPacket(std::string_view key) {
 }
 
 constexpr bool isControlMessage(std::string_view key) {
-  return key == HEARTBEAT || key == SUBSCRIBE || key == CONNECT || key == RESET;
+  return key == HEARTBEAT || key == HEARTBEAT_ACK || key == SUBSCRIBE || key == CONNECT || key == RESET;
 }
 
 constexpr bool isFilePacket(std::string_view key) {

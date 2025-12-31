@@ -5,38 +5,35 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+
 #include <zmq.hpp>
-#include "broker.pb.h"  // Your existing proto
+
+#include "broker.pb.h"
+
+#include "connectionmanager.h"
 #include "safequeue.h"
+#include "workerinterface.h"
 
-struct ConnectionConfig {
-  std::string address;  // e.g., "tcp://127.0.0.1:5555"
-  std::string clientId;
-};
-
-class ZmqWorker {
+class ZmqWorker : public WorkerInterface {
 public:
-  using MessageCallback = std::function<void(const broker::BrokerPayload&)>;
-  using StatusCallback = std::function<void(bool)>;
-
-  ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, StatusCallback statusCb);
+  ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, WorkerStatusCallback statusCb);
   ~ZmqWorker();
 
-  void start();
-  void stop();
-  bool writeMessage(const broker::BrokerPayload& msg);
-  bool writeControlMessage(const broker::BrokerPayload& msg);
-  void setMessageCallback(MessageCallback callback);
+  void start() override;
+  void stop() override;
+  bool writeMessage(const broker::BrokerPayload& msg) override;
+  bool writeControlMessage(const broker::BrokerPayload& msg) override;
+  void setMessageCallback(WorkerMessageCallback callback) override;
 
 private:
   void run();
-
   void sendHeartbeat(zmq::socket_t& socket);
 
+private:
   ConnectionConfig m_config;
   SafeQueue<broker::BrokerPayload>* m_inboundQueue;
-  StatusCallback m_statusCallback;
-  MessageCallback m_messageCallback;
+  WorkerStatusCallback m_statusCallback;
+  WorkerMessageCallback m_messageCallback;
 
   std::atomic<bool> m_running;
   std::thread m_workerThread;
@@ -46,7 +43,7 @@ private:
   SafeQueue<broker::BrokerPayload> m_controlQueue;
   SafeQueue<broker::BrokerPayload> m_outboundQueue;
 
-  bool m_isOnline = false;
+  std::atomic<bool> m_isOnline;
   std::chrono::steady_clock::time_point m_lastRxTime;
 };
 

@@ -4,7 +4,7 @@
 #include <QJsonObject>
 #include <QTimer>
 
-#include "zmqconnectionmanager.h"
+#include "connectionmanager.h"
 
 int main(int argc, char* argv[]) {
   QCoreApplication a(argc, argv);
@@ -13,9 +13,9 @@ int main(int argc, char* argv[]) {
   config.address = "tcp://127.0.0.1:5555";
   config.clientId = "client2";
 
-  ZmqConnectionManager::init(config);
+  ConnectionManager::init(config);
 
-  ZmqConnectionManager::registerCallback("MessageReceived", [](const std::string& data) { std::cout << data << std::endl; });
+  ConnectionManager::registerCallback("MessageReceived", [](const std::string& data) { std::cout << data << std::endl; });
 
   QTimer t;
   QObject::connect(&t, &QTimer::timeout, []() {
@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
     payload["message"] = "Sending a message";
     payload["timestamp"] = QDateTime::currentMSecsSinceEpoch();
 
-    ZmqConnectionManager::sendMessage("test", QString(QJsonDocument(payload).toJson()).toStdString());
+    ConnectionManager::sendMessage("test", QString(QJsonDocument(payload).toJson()).toStdString());
   });
 
   t.start(2000);

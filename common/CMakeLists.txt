@@ -22,12 +22,13 @@ add_library(ZmqLib STATIC
     ${PROTO_GENERATED_HEADERS}
     zmqworker.h
     zmqworker.cpp
-    zmqconnectionmanager.h
-    zmqconnectionmanager.cpp
     connectionapi.h
-    zmqconnectionapi.cpp
+    connectionapi.cpp
     logger.h
     messagekeys.h
+    workerinterface.h
+    connectionmanager.h
+    connectionmanager.cpp
 )
 
 target_include_directories(ZmqLib PUBLIC generated)

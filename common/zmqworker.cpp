@@ -5,8 +5,8 @@
 
 #include <iostream>
 
-ZmqWorker::ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, StatusCallback statusCb)
-    : m_config(config), m_inboundQueue(inboundQueue), m_statusCallback(statusCb), m_running(false), m_context(1) {}
+ZmqWorker::ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, WorkerStatusCallback statusCb)
+    : m_config(config), m_inboundQueue(inboundQueue), m_statusCallback(statusCb), m_running(false), m_context(1), m_isOnline(false) {}
 
 ZmqWorker::~ZmqWorker() {
   stop();
@@ -34,7 +34,7 @@ bool ZmqWorker::writeControlMessage(const broker::BrokerPayload& msg) {
   return true;
 }
 
-void ZmqWorker::setMessageCallback(MessageCallback callback) {
+void ZmqWorker::setMessageCallback(WorkerMessageCallback callback) {
   m_messageCallback = callback;
 }
 
@@ -44,15 +44,15 @@ void ZmqWorker::run() {
   socket.set(zmq::sockopt::routing_id, m_config.clientId);
   socket.connect(m_config.address);
 
-  auto lastHeartbeat = std::chrono::steady_clock::now();
-  const auto SERVER_TIMEOUT = std::chrono::seconds(10);
   const auto HEARTBEAT_INTERVAL = std::chrono::seconds(3);
+  const auto SERVER_TIMEOUT = std::chrono::seconds(10);
   auto pollTimeout = std::chrono::milliseconds(20);
+  auto lastHeartbeat = std::chrono::steady_clock::now() - HEARTBEAT_INTERVAL;
   m_isOnline = false;
-  m_lastRxTime = lastHeartbeat;
+  m_lastRxTime = std::chrono::steady_clock::now();
 
   if (m_statusCallback) {
-    m_statusCallback(true);
+    m_statusCallback(m_isOnline);
   }
 
   while (m_running) {
@@ -68,7 +68,7 @@ void ZmqWorker::run() {
         if (!m_isOnline) {
           m_isOnline = true;
           if (m_statusCallback) {
-            m_statusCallback(true);
+            m_statusCallback(m_isOnline);
           }
         }
 

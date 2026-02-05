@@ -78,7 +78,7 @@ void ZmqWorker::run() {
           } else if (m_inboundQueue) {
             bool pushed = false;
             while (!pushed && m_running) {
-              if (m_inboundQueue->push(std::move(payload), std::chrono::milliseconds(100))) {
+              if (m_inboundQueue->push(payload, std::chrono::milliseconds(100))) {
                 pushed = true;
               } else {
                 auto now = std::chrono::steady_clock::now();

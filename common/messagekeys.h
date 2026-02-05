@@ -11,6 +11,8 @@ constexpr std::string_view HEARTBEAT = "__HEARTBEAT__";
 constexpr std::string_view HEARTBEAT_ACK = "__HEARTBEAT_ACK__";
 constexpr std::string_view SUBSCRIBE = "__SUBSCRIBE__";
 
+constexpr std::string_view SYS_STATS = "__SYS_STATS__";
+
 // File Transfer
 constexpr std::string_view FILE_META = "__FILE_META__";
 constexpr std::string_view FILE_CHUNK = "__CHUNK__";

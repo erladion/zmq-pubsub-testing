@@ -1,18 +1,37 @@
 #include "zmqbroker.h"
 
+#include "config.h"
 #include "logger.h"
 #include "messagekeys.h"
+#include "uuidhelper.h"
 
 #include <iostream>
+#include <sstream>
 
-ZmqBroker::ZmqBroker() : m_running(false), m_context(1) {}
+ZmqBroker::ZmqBroker() : m_running(false), m_context(1), m_brokerId(generateUUID()) {}
+
 ZmqBroker::~ZmqBroker() {
   stop();
 }
 
 void ZmqBroker::start(const std::vector<std::string>& bindAddresses) {
   m_running = true;
+  m_startTime = std::chrono::steady_clock::now();
+  m_lastStatsTime = std::chrono::steady_clock::now();
   m_brokerThread = std::thread(&ZmqBroker::run, this, bindAddresses);
+}
+
+void ZmqBroker::stop() {
+  m_running = false;
+
+  for (auto& peer : m_peers) {
+    peer->stop();
+  }
+  m_peers.clear();
+
+  if (m_brokerThread.joinable()) {
+    m_brokerThread.join();
+  }
 }
 
 void ZmqBroker::run(const std::vector<std::string>& addresses) {
@@ -30,118 +49,54 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
   }
 
   auto lastCleanup = std::chrono::steady_clock::now();
+
   while (m_running) {
+    // Poll for local clients
     zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
     zmq::poll(items, 1, std::chrono::milliseconds(20));
 
     if (items[0].revents & ZMQ_POLLIN) {
       zmq::message_t identity;
-      socket.recv(identity, zmq::recv_flags::none);
-
-      zmq::message_t payload;
-      socket.recv(payload, zmq::recv_flags::none);
-
-      while (socket.get(zmq::sockopt::rcvmore)) {
-        zmq::message_t trash;
-        socket.recv(trash, zmq::recv_flags::none);
-      }
-
-      std::string senderId = identity.to_string();
-
-      broker::BrokerPayload msg;
-      if (msg.ParseFromArray(payload.data(), payload.size())) {
-        bool newClient = (m_clients.find(senderId) == m_clients.end());
-        {
-          std::lock_guard<std::mutex> lock(m_stateMutex);
-          m_clients[senderId].identity = senderId;
-          m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
-        }
-
-        if (newClient) {
-          Logger::Log(Logger::INFO, "New client: " + senderId + ". Requesting Subscription Reset");
-
-          zmq::message_t outId(senderId.data(), senderId.size());
-
-          broker::BrokerPayload resetMsg;
-          resetMsg.set_handler_key(Keys::RESET);
-          resetMsg.set_topic("");
-          std::string resetData = resetMsg.SerializeAsString();
-          zmq::message_t outData(resetData.begin(), resetData.end());
-
-          try {
-            socket.send(outId, zmq::send_flags::sndmore);
-            socket.send(outData, zmq::send_flags::none);
-          } catch (const zmq::error_t& e) {
-            Logger::Log(Logger::ERROR, "⚠️ Failed to send RESET to " + senderId + " : " + e.what() + ". Retrying on next message");
-
-            std::lock_guard<std::mutex> lock(m_stateMutex);
-            m_clients.erase(senderId);
+      if (socket.recv(identity, zmq::recv_flags::none)) {
+        zmq::message_t payload;
+        if (socket.recv(payload, zmq::recv_flags::none)) {
+          // Flush garbage (Multipart safety)
+          while (socket.get(zmq::sockopt::rcvmore)) {
+            zmq::message_t trash;
+            (void)socket.recv(trash, zmq::recv_flags::none);
           }
-        }
 
-        if (msg.handler_key() == Keys::CONNECT) {
-          std::lock_guard<std::mutex> lock(m_stateMutex);
-          Logger::Log(Logger::INFO, "Client " + senderId + " Connected (Session Reset)");
+          // Stats
+          m_totalMessages++;
+          m_msgsInterval++;
+          m_totalBytes += payload.size();
+          m_bytesInterval += payload.size();
 
-          // Wipe old data to ensure a fresh start
-          m_clients.erase(senderId);
-
-          m_clients[senderId].identity = senderId;
-          m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
-        } else if (msg.handler_key() == Keys::HEARTBEAT) {
-          zmq::message_t outId(senderId.data(), senderId.size());
-
-          broker::BrokerPayload ack;
-          ack.set_handler_key(Keys::HEARTBEAT_ACK);
-          ack.set_topic("");
-          std::string ackData = ack.SerializeAsString();
-          zmq::message_t outData(ackData.begin(), ackData.end());
-
-          try {
-            socket.send(outId, zmq::send_flags::sndmore);
-            socket.send(outData, zmq::send_flags::none);
-          } catch (...) {
-          }
-        } else if (msg.handler_key() == Keys::SUBSCRIBE) {
-          std::lock_guard<std::mutex> lock(m_stateMutex);
-
-          auto result = m_clients[senderId].subscriptions.insert(msg.topic());
-          if (result.second) {
-            Logger::Log(Logger::INFO, "Client " + senderId + " Subscribed to " + msg.topic());
-          }
-        } else {
-          Logger::Log(Logger::INFO, "Broadcasting topic '" + msg.topic() + "' from " + senderId);
-          std::lock_guard<std::mutex> lock(m_stateMutex);
-          for (auto& [id, state] : m_clients) {
-            if (id == senderId) {
-              continue;
-            }
-
-            if (state.subscriptions.count(msg.topic())) {
-              zmq::message_t outId(id.data(), id.size());
-              zmq::message_t outData(payload.data(), payload.size());
-
-              try {
-                socket.send(outId, zmq::send_flags::sndmore);
-                socket.send(outData, zmq::send_flags::none);
-              } catch (const zmq::error_t& e) {
-                state.lastSeen = std::chrono::steady_clock::time_point();
-              }
-            }
+          broker::BrokerPayload msg;
+          if (msg.ParseFromArray(payload.data(), payload.size())) {
+            processMessage(socket, msg, identity.to_string(), false);
           }
         }
       }
     }
 
+    // Poll for peer messages
+    broker::BrokerPayload peerMsg;
+    while (m_peerInboundQueue.try_pop(peerMsg)) {
+      processMessage(socket, peerMsg, "PEER", true);
+    }
+
     auto now = std::chrono::steady_clock::now();
-    if (now - lastCleanup > std::chrono::seconds(2)) {  // Check every 2 seconds
+
+    // Cleanup zombies
+    if (now - lastCleanup > std::chrono::seconds(2)) {
       std::lock_guard<std::mutex> lock(m_stateMutex);
 
       for (auto it = m_clients.begin(); it != m_clients.end();) {
         auto elapsed = now - it->second.lastSeen;
 
         if (elapsed > CLIENT_TIMEOUT) {
-          Logger::Log(Logger::INFO, "☠️ KILLED Zombie Client: " + it->first + " (Inactive for 10s)");
+          Logger::Log(Logger::INFO, "☠️ KILLED Zombie Client: " + it->first);
           it = m_clients.erase(it);
         } else {
           ++it;
@@ -149,11 +104,219 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
       }
       lastCleanup = now;
     }
+
+    // Broadcast stats
+    if (now - m_lastStatsTime > std::chrono::seconds(1)) {
+      broadcastStats(socket);
+      m_lastStatsTime = now;
+      m_msgsInterval = 0;
+      m_bytesInterval = 0;
+    }
   }
 }
 
-void ZmqBroker::stop() {
-  m_running = false;
-  if (m_brokerThread.joinable())
-    m_brokerThread.join();
+void ZmqBroker::processMessage(zmq::socket_t& socket, broker::BrokerPayload& msg, const std::string& senderId, bool isFromPeer) {
+  std::string key = msg.handler_key();
+
+  // Local clients
+  if (!isFromPeer) {
+    bool newClient = (m_clients.find(senderId) == m_clients.end());
+    {
+      std::lock_guard<std::mutex> lock(m_stateMutex);
+      m_clients[senderId].identity = senderId;
+      m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
+    }
+
+    if (newClient) {
+      Logger::Log(Logger::INFO, "New client: " + senderId + ". Requesting Subscription Reset");
+
+      zmq::message_t outId(senderId.data(), senderId.size());
+
+      broker::BrokerPayload resetMsg;
+      resetMsg.set_handler_key(Keys::RESET.data(), Keys::RESET.size());
+      resetMsg.set_topic("");
+      std::string resetData = resetMsg.SerializeAsString();
+      zmq::message_t outData(resetData.begin(), resetData.end());
+
+      try {
+        socket.send(outId, zmq::send_flags::sndmore);
+        socket.send(outData, zmq::send_flags::none);
+      } catch (...) {
+      }  // Ignore send errors on new clients
+
+      return;  // Don't broadcast RESET requests
+    }
+
+    if (key == Keys::CONNECT || key == Keys::HEARTBEAT) {
+      // Just keep-alive, already handled by updating 'lastSeen' above
+      if (key == Keys::HEARTBEAT) {
+        zmq::message_t outId(senderId.data(), senderId.size());
+
+        broker::BrokerPayload ack;
+        ack.set_handler_key(Keys::HEARTBEAT_ACK);
+        ack.set_topic("");
+        std::string ackData = ack.SerializeAsString();
+        zmq::message_t outData(ackData.begin(), ackData.end());
+
+        try {
+          socket.send(outId, zmq::send_flags::sndmore);
+          socket.send(outData, zmq::send_flags::none);
+        } catch (...) {
+        }
+      }
+      return;
+    }
+
+    if (key == Keys::SUBSCRIBE) {
+      std::lock_guard<std::mutex> lock(m_stateMutex);
+      auto result = m_clients[senderId].subscriptions.insert(msg.topic());
+      if (result.second) {
+        Logger::Log(Logger::INFO, "Client " + senderId + " Subscribed to " + msg.topic());
+      }
+      return;
+    }
+  } else {
+    // Ignore internal control messages from peers to prevent loops/confusion
+    if (key == Keys::RESET || key == Keys::HEARTBEAT_ACK || key == Keys::HEARTBEAT) {
+      return;
+    }
+  }
+
+  // If msg has no ID (fresh from client), give it one.
+  if (msg.message_uuid().empty()) {
+    msg.set_message_uuid(generateUUID());
+    msg.set_origin_broker_id(m_brokerId);
+  }
+
+  // Check if we've handled this UUID before (Loop protection)
+  if (isDuplicate(msg.message_uuid())) {
+    return;  // Drop it, we've seen it.
+  }
+
+  std::string data = msg.SerializeAsString();
+
+  // Local subscribers
+  {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+
+    for (auto& [id, state] : m_clients) {
+      // Don't echo back to sender if it's a local client
+      if (!isFromPeer && id == senderId) {
+        continue;
+      }
+
+      if (state.subscriptions.count(msg.topic())) {
+        zmq::message_t outId(id.data(), id.size());
+        zmq::message_t outData(data.begin(), data.end());
+
+        try {
+          socket.send(outId, zmq::send_flags::sndmore);
+          socket.send(outData, zmq::send_flags::none);
+        } catch (const zmq::error_t& e) {
+          // Client likely disconnected, will be cleaned up by watchdog
+        }
+      }
+    }
+  }
+
+  // Flood peers
+  for (auto& peer : m_peers) {
+    peer->writeMessage(msg);
+  }
+}
+
+bool ZmqBroker::isDuplicate(const std::string& uuid) {
+  std::lock_guard<std::mutex> lock(m_historyMutex);
+  if (m_seenMessageIds.count(uuid)) {
+    return true;
+  }
+
+  m_seenMessageIds.insert(uuid);
+  m_messageIdOrder.push_back(uuid);
+
+  if (m_messageIdOrder.size() > MAX_HISTORY_SIZE) {
+    m_seenMessageIds.erase(m_messageIdOrder.front());
+    m_messageIdOrder.pop_front();
+  }
+  return false;
+}
+
+void ZmqBroker::broadcastStats(zmq::socket_t& socket) {
+  std::lock_guard<std::mutex> lock(m_stateMutex);
+
+  auto uptime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - m_startTime).count();
+  const double kbSec = static_cast<double>(m_bytesInterval) / 1024.0;
+
+  std::stringstream ss;
+  ss << "{";
+  ss << "\"type\":\"stats_update\",";
+  ss << "\"broker_id\":\"" << m_brokerId << "\",";
+  ss << "\"clients\":" << m_clients.size() << ",";
+  ss << "\"peers_count\":" << m_peers.size() << ",";
+  ss << "\"msgs_per_sec\":" << m_msgsInterval << ",";
+  ss << "\"kb_per_sec\":" << kbSec << ",";
+  ss << "\"total_msgs\":" << m_totalMessages << ",";
+  ss << "\"uptime_sec\":" << uptime;
+
+  ss << ", \"connected_clients\": [";
+
+  bool firstClient = true;
+  for (const auto& [id, state] : m_clients) {
+    if (!firstClient)
+      ss << ",";
+    firstClient = false;
+
+    ss << "{";
+    ss << "\"id\": \"" << id << "\",";
+    ss << "\"subscriptions\": [";
+
+    bool firstSub = true;
+    for (const auto& topic : state.subscriptions) {
+      if (!firstSub)
+        ss << ",";
+      firstSub = false;
+      ss << "\"" << topic << "\"";
+    }
+    ss << "]}";
+  }
+  ss << "]}";
+
+  broker::BrokerPayload statsMsg;
+  statsMsg.set_handler_key(Keys::SYS_STATS);
+  statsMsg.set_topic(Keys::SYS_STATS);
+  statsMsg.set_sender_id("BROKER_SYSTEM");
+  statsMsg.set_raw_data(ss.str());
+
+  std::string data = statsMsg.SerializeAsString();
+
+  for (const auto& [id, state] : m_clients) {
+    // FIX: Explicit string cast for find()
+    if (state.subscriptions.find(Keys::SYS_STATS) != state.subscriptions.end()) {
+      zmq::message_t outId(id.data(), id.size());
+      zmq::message_t outData(data.begin(), data.end());
+      try {
+        socket.send(outId, zmq::send_flags::sndmore);
+        socket.send(outData, zmq::send_flags::none);
+      } catch (...) {
+      }
+    }
+  }
+}
+
+void ZmqBroker::connectToPeer(const std::string& peerAddress) {
+  ConnectionConfig config;
+  config.address = peerAddress;
+  config.clientId = "BrokerLink-" + m_brokerId.substr(0, 8);
+
+  auto worker = std::make_unique<ZmqWorker>(config, nullptr, nullptr);
+  worker->setMessageCallback([this](const broker::BrokerPayload& msg) { m_peerInboundQueue.push(msg); });
+  worker->start();
+
+  broker::BrokerPayload sub;
+  sub.set_handler_key(Keys::SUBSCRIBE);
+  sub.set_topic("");  // All topics
+  worker->writeControlMessage(sub);
+
+  Logger::Log(Logger::INFO, "Connected to Peer: " + peerAddress);
+  m_peers.push_back(std::move(worker));
 }

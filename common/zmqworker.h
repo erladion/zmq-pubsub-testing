@@ -14,7 +14,7 @@
 #include "safequeue.h"
 #include "workerinterface.h"
 
-class ZmqWorker : public WorkerInterface {
+class ZmqWorker final : public WorkerInterface {
 public:
   ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, WorkerStatusCallback statusCb);
   ~ZmqWorker();

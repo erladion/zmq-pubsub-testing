@@ -30,6 +30,7 @@ add_library(ZmqLib STATIC
     connectionmanager.h
     connectionmanager.cpp
     config.h
+    uuidhelper.h
 )
 
 target_include_directories(ZmqLib PUBLIC generated)

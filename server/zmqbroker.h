@@ -53,6 +53,8 @@ private:
   std::mutex m_stateMutex;
   std::unordered_map<std::string, ClientState> m_clients;
 
+  std::unordered_map<std::string, std::vector<std::string>> m_topicSubscribers;
+
   std::vector<std::unique_ptr<ZmqWorker>> m_peers;
 
   SafeQueue<broker::BrokerPayload> m_peerInboundQueue;

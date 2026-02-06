@@ -97,6 +97,19 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
         if (elapsed > CLIENT_TIMEOUT) {
           Logger::Log(Logger::INFO, "☠️ KILLED Zombie Client: " + it->first);
+
+          for (const auto& topic : it->second.subscriptions) {
+            auto& subs = m_topicSubscribers[topic];
+            auto subIt = std::find(subs.begin(), subs.end(), it->first);
+            if (subIt != subs.end()) {
+              *subIt = subs.back();
+              subs.pop_back();
+            }
+            if (subs.empty()) {
+              m_topicSubscribers.erase(topic);
+            }
+          }
+
           it = m_clients.erase(it);
         } else {
           ++it;
@@ -171,6 +184,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket, broker::BrokerPayload& msg
       std::lock_guard<std::mutex> lock(m_stateMutex);
       auto result = m_clients[senderId].subscriptions.insert(msg.topic());
       if (result.second) {
+        m_topicSubscribers[msg.topic()].push_back(senderId);
         Logger::Log(Logger::INFO, "Client " + senderId + " Subscribed to " + msg.topic());
       }
       return;
@@ -199,13 +213,18 @@ void ZmqBroker::processMessage(zmq::socket_t& socket, broker::BrokerPayload& msg
   {
     std::lock_guard<std::mutex> lock(m_stateMutex);
 
-    for (auto& [id, state] : m_clients) {
-      // Don't echo back to sender if it's a local client
-      if (!isFromPeer && id == senderId) {
-        continue;
-      }
+    if (m_topicSubscribers.count(msg.topic())) {
+      for (const auto& id : m_topicSubscribers[msg.topic()]) {
+        // Don't echo back to sender if it's a local client
+        if (!isFromPeer && id == senderId) {
+          continue;
+        }
 
-      if (state.subscriptions.count(msg.topic())) {
+        // Verify client is still connected (safety check)
+        if (m_clients.find(id) == m_clients.end()) {
+          continue;
+        }
+
         zmq::message_t outId(id.data(), id.size());
         zmq::message_t outData(data.begin(), data.end());
 
@@ -213,7 +232,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket, broker::BrokerPayload& msg
           socket.send(outId, zmq::send_flags::sndmore);
           socket.send(outData, zmq::send_flags::none);
         } catch (const zmq::error_t& e) {
-          // Client likely disconnected, will be cleaned up by watchdog
+          // Client likely disconnected, will be picked up by Zombie killer
         }
       }
     }

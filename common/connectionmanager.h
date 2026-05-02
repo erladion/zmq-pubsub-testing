@@ -1,10 +1,14 @@
 #ifndef CONNECTIONMANAGER_H
 #define CONNECTIONMANAGER_H
 
+#include <google/protobuf/any.pb.h>
+#include <google/protobuf/message.h>
+
 #include <atomic>
 #include <chrono>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -12,9 +16,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <google/protobuf/any.pb.h>
-#include <google/protobuf/message.h>
 
 #include "config.h"
 #include "logger.h"
@@ -34,8 +35,14 @@ struct FileTransferState {
   size_t receivedSize;
 };
 
-class ConnectionManager : public std::enable_shared_from_this<ConnectionManager> {
-public:
+struct CallbackEntry {
+  void* instance;
+  MessageCallback func;
+};
+
+class ConnectionManager
+    : public std::enable_shared_from_this<ConnectionManager> {
+ public:
   static void init(const ConnectionConfig& config);
   static void shutdown();
   static ConnectionManager& instance();
@@ -46,26 +53,49 @@ public:
   static bool sendFile(const std::string& key, const std::string& filepath);
 
   template <typename T>
-  static typename std::enable_if<std::is_base_of<google::protobuf::Message, T>::value, bool>::type sendMessage(const std::string& key,
-                                                                                                               const T& protobufMessage) {
+  static typename std::enable_if<
+      std::is_base_of<google::protobuf::Message, T>::value, bool>::type
+  sendMessage(const std::string& key, const T& protobufMessage) {
     return instance().sendMessageInternal(key, protobufMessage);
   }
 
-  static void registerCallback(const std::string& key, MessageCallback callback);
-  static void registerFileCallback(const std::string& key, FileCallback callback);
-  static void registerStatusCallback(StatusCallback callback);
-
-  template <typename T>
-  static void registerCallback(const std::string& key, std::function<void(const T&)> callback) {
-    registerCallback(key, [callback, key](const std::string& rawData) {
-      T typedMsg;
-      if (tryUnpack(rawData, typedMsg)) {
-        callback(typedMsg);
-      } else {
-        Logger::Log(Logger::ERROR, "Failed to unpack message for key: " + key);
-      }
-    });
+  template <typename ClassType>
+  static void registerCallback(const std::string& key,
+                               void (ClassType::*method)(const std::string&),
+                               ClassType* instance) {
+    registerInternal(
+        key,
+        [instance, method](const std::string& msg) {
+          (instance->*method)(msg);
+        },
+        instance);
   }
+
+  template <typename T, typename ClassType>
+  static void registerCallback(const std::string& key,
+                               void (ClassType::*method)(const T&),
+                               ClassType* instance) {
+    registerInternal(
+        key,
+        [instance, method](const std::string& raw) {
+          T msg;
+          if (tryUnpack(raw, msg)) {
+            (instance->*method)(msg);
+          } else {
+            Logger::Log(Logger::ERROR,
+                        "Failed to unpack message for key: " + key);
+          }
+        },
+        instance);
+  }
+
+  static void registerCallback(const std::string& key, MessageCallback cb) {
+    registerInternal(key, cb, nullptr);
+  }
+
+  static void registerFileCallback(const std::string& key,
+                                   FileCallback callback);
+  static void registerStatusCallback(StatusCallback callback);
 
   template <typename T>
   static bool tryUnpack(const std::string& raw, T& outMsg) {
@@ -79,12 +109,35 @@ public:
     return outMsg.ParseFromString(raw);
   }
 
-private:
+  static void unregisterCallback(const std::string& key, void* instance);
+
+  static bool sendRequest(const std::string& requestTopic,
+                          const std::string& replyTopic,
+                          const std::string& payload, std::string& outResponse,
+                          int timeoutMs = 5000);
+
+  template <typename ReqT, typename ResT>
+  static bool sendRequest(const std::string& requestTopic,
+                          const std::string& replyTopic, const ReqT& payload,
+                          ResT& outResponse, int timeoutMs = 5000) {
+    std::string payloadData = payload.serializeAsString();
+    std::string rawResponse;
+
+    if (sendRequest(requestTopic, replyTopic, payloadData, rawResponse,
+                    timeoutMs)) {
+      return tryUnpack(rawResponse, outResponse);
+    }
+
+    return false;
+  }
+
+ private:
   ConnectionManager(const ConnectionConfig& config);
   ~ConnectionManager();
 
   void resubscribeAll();
-  void registerInternal(const std::string& key, MessageCallback callback);
+  static void registerInternal(const std::string& key, MessageCallback callback,
+                               void* instance);
   void registerFileInternal(const std::string& key, FileCallback callback);
 
   bool sendDataInternal(const std::string& key, const std::string_view& data);
@@ -105,7 +158,7 @@ private:
   void handleMessage(const broker::BrokerPayload& msg);
   void handleFilePacket(const broker::BrokerPayload& msg);
 
-private:
+ private:
   static std::shared_ptr<ConnectionManager> m_instance;
   static std::mutex m_initMutex;
 
@@ -120,7 +173,7 @@ private:
   std::atomic<bool> m_connected;
 
   std::mutex m_mapMutex;
-  std::map<std::string, std::vector<MessageCallback>> m_msgHandlers;
+  std::map<std::string, std::vector<CallbackEntry>> m_msgHandlers;
   std::map<std::string, std::vector<FileCallback>> m_fileHandlers;
   std::vector<StatusCallback> m_statusHandlers;
 
@@ -128,8 +181,10 @@ private:
 
   std::chrono::steady_clock::time_point m_lastConnectionTime;
 
-  static std::vector<std::pair<std::string, MessageCallback>> s_pendingMsgCallbacks;
-  static std::vector<std::pair<std::string, FileCallback>> s_pendingFileCallbacks;
+  static std::vector<std::tuple<std::string, MessageCallback, void*>>
+      s_pendingMsgCallbacks;
+  static std::vector<std::pair<std::string, FileCallback>>
+      s_pendingFileCallbacks;
   static std::vector<StatusCallback> s_pendingStatusCallbacks;
 };
 

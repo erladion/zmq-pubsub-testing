@@ -1,4 +1,5 @@
 #include "connectionmanager.h"
+
 #include <filesystem>
 #include <random>
 #include <sstream>
@@ -6,7 +7,6 @@
 #include "logger.h"
 #include "messagekeys.h"
 #include "uuidhelper.h"
-
 #include "zmqworker.h"
 // #include "grpcworker.h"
 
@@ -15,18 +15,23 @@ using namespace std::string_literals;
 std::shared_ptr<ConnectionManager> ConnectionManager::m_instance = nullptr;
 std::mutex ConnectionManager::m_initMutex;
 
-std::vector<std::pair<std::string, MessageCallback>> ConnectionManager::s_pendingMsgCallbacks;
-std::vector<std::pair<std::string, FileCallback>> ConnectionManager::s_pendingFileCallbacks;
+std::vector<std::tuple<std::string, MessageCallback, void*>>
+    ConnectionManager::s_pendingMsgCallbacks;
+std::vector<std::pair<std::string, FileCallback>>
+    ConnectionManager::s_pendingFileCallbacks;
 std::vector<StatusCallback> ConnectionManager::s_pendingStatusCallbacks;
 
 void ConnectionManager::init(const ConnectionConfig& config) {
   std::lock_guard<std::mutex> lock(m_initMutex);
   if (!m_instance) {
-    m_instance = std::shared_ptr<ConnectionManager>(new ConnectionManager(config), [](ConnectionManager* ptr) { delete ptr; });
+    m_instance = std::shared_ptr<ConnectionManager>(
+        new ConnectionManager(config),
+        [](ConnectionManager* ptr) { delete ptr; });
 
     // Flush pending callbacks
     for (auto& p : s_pendingMsgCallbacks) {
-      m_instance->registerInternal(p.first, p.second);
+      m_instance->registerInternal(std::get<0>(p), std::get<1>(p),
+                                   std::get<2>(p));
     }
     s_pendingMsgCallbacks.clear();
 
@@ -55,16 +60,84 @@ void ConnectionManager::shutdown() {
 
 ConnectionManager& ConnectionManager::instance() {
   if (m_instance == nullptr) {
+    Logger::Log(Logger::ERROR,
+                "ConnectionManager::instance() called before init()!");
+    throw std::runtime_error("ConnectionManager not initialized");
   }
 
   return *m_instance;
 }
 
-ConnectionManager::ConnectionManager(const ConnectionConfig& config) : m_clientId(config.clientId), m_running(true), m_connected(false) {
+void ConnectionManager::unregisterCallback(const std::string& key,
+                                           void* instance) {
+  if (!m_instance) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(m_instance->m_mapMutex);
+
+  if (m_instance->m_msgHandlers.count(key)) {
+    auto& vec = m_instance->m_msgHandlers[key];
+
+    auto newEnd = std::remove_if(vec.begin(), vec.end(),
+                                 [instance](const CallbackEntry& entry) {
+                                   return entry.instance == instance;
+                                 });
+
+    vec.erase(newEnd, vec.end());
+
+    if (vec.empty()) {
+      m_instance->m_msgHandlers.erase(key);
+    }
+  }
+}
+
+bool ConnectionManager::sendRequest(const std::string& requestTopic,
+                                    const std::string& replyTopic,
+                                    const std::string& payload,
+                                    std::string& outResponse, int timeoutMs) {
+  if (!m_instance) {
+    return false;
+  }
+
+  auto promise = std::make_shared<std::promise<std::string>>();
+  std::future<std::string> future = promise->get_future();
+
+  void* tempInstanceKey = promise.get();
+
+  registerInternal(
+      replyTopic,
+      [promise](const std::string& responseData) {
+        try {
+          promise->set_value(responseData);
+        } catch (...) {
+        }
+      },
+      tempInstanceKey);
+
+  sendData(requestTopic, payload);
+
+  bool success = false;
+  if (future.wait_for(std::chrono::milliseconds(timeoutMs)) ==
+      std::future_status::ready) {
+    outResponse = future.get();
+    success = true;
+  } else {
+    Logger::Log(Logger::WARNING, "Timeout waiting for reply on: " + replyTopic);
+  }
+
+  unregisterCallback(replyTopic, tempInstanceKey);
+
+  return success;
+}
+
+ConnectionManager::ConnectionManager(const ConnectionConfig& config)
+    : m_clientId(config.clientId), m_running(true), m_connected(false) {
   auto statusHandler = [this](bool connected) {
     std::lock_guard<std::mutex> lock(m_mapMutex);
 
-    Logger::Log(Logger::INFO, std::string("Status: ") + (connected ? "ONLINE" : "OFFLINE"));
+    Logger::Log(Logger::INFO,
+                std::string("Status: ") + (connected ? "ONLINE" : "OFFLINE"));
 
     m_connected = connected;
 
@@ -129,41 +202,47 @@ ConnectionManager::~ConnectionManager() {
   }
 }
 
-bool ConnectionManager::sendMessage(const std::string& key, const std::string& message) {
+bool ConnectionManager::sendMessage(const std::string& key,
+                                    const std::string& message) {
   if (!m_instance) {
     return false;
   }
   return instance().sendDataInternal(key, message);
 }
-bool ConnectionManager::sendData(const std::string& key, const std::string_view& data) {
+bool ConnectionManager::sendData(const std::string& key,
+                                 const std::string_view& data) {
   if (!m_instance) {
     return false;
   }
   return instance().sendDataInternal(key, data);
 }
-bool ConnectionManager::sendDataRaw(const std::string& key, const char* data, int len) {
+bool ConnectionManager::sendDataRaw(const std::string& key, const char* data,
+                                    int len) {
   if (!m_instance) {
     return false;
   }
   return instance().sendDataInternal(key, std::string(data, len));
 }
-bool ConnectionManager::sendFile(const std::string& key, const std::string& filepath) {
+bool ConnectionManager::sendFile(const std::string& key,
+                                 const std::string& filepath) {
   if (!m_instance) {
     return false;
   }
   return instance().sendFileInternal(key, filepath);
 }
 
-void ConnectionManager::registerCallback(const std::string& key, MessageCallback callback) {
+void ConnectionManager::registerCallback(const std::string& key,
+                                         MessageCallback callback) {
   std::lock_guard<std::mutex> lock(m_initMutex);
   if (m_instance) {
     instance().registerInternal(key, callback);
   } else {
-    s_pendingMsgCallbacks.push_back({key, callback});
+    s_pendingMsgCallbacks.push_back({key, callback, nullptr});
   }
 }
 
-void ConnectionManager::registerFileCallback(const std::string& key, FileCallback callback) {
+void ConnectionManager::registerFileCallback(const std::string& key,
+                                             FileCallback callback) {
   std::lock_guard<std::mutex> lock(m_initMutex);
   if (m_instance) {
     instance().registerFileInternal(key, callback);
@@ -184,7 +263,8 @@ void ConnectionManager::registerStatusCallback(StatusCallback callback) {
 
 void ConnectionManager::resubscribeAll() {
   std::lock_guard<std::mutex> lock(m_mapMutex);
-  Logger::Log(Logger::INFO, "Server requested Reset. Re-sending all subscriptions...");
+  Logger::Log(Logger::INFO,
+              "Server requested Reset. Re-sending all subscriptions...");
 
   for (auto const& [topic, _] : m_msgHandlers) {
     broker::BrokerPayload sub;
@@ -203,6 +283,18 @@ void ConnectionManager::resubscribeAll() {
   }
 }
 
+void ConnectionManager::registerInternal(const std::string& key,
+                                         MessageCallback callback,
+                                         void* instance) {
+  if (!m_instance) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(m_instance->m_mapMutex);
+
+  m_instance->m_msgHandlers[key].push_back({instance, callback});
+}
+
 bool ConnectionManager::sendRawEnvelope(const broker::BrokerPayload& envelope) {
   if (!m_worker) {
     return false;
@@ -217,7 +309,8 @@ bool ConnectionManager::sendRawEnvelope(const broker::BrokerPayload& envelope) {
   return m_worker->writeMessage(envelope);
 }
 
-bool ConnectionManager::sendDataInternal(const std::string& key, const std::string_view& data) {
+bool ConnectionManager::sendDataInternal(const std::string& key,
+                                         const std::string_view& data) {
   broker::BrokerPayload msg;
   msg.set_handler_key(key);
   msg.set_sender_id(m_clientId);
@@ -226,9 +319,10 @@ bool ConnectionManager::sendDataInternal(const std::string& key, const std::stri
   return sendRawEnvelope(msg);
 }
 
-void ConnectionManager::registerInternal(const std::string& key, MessageCallback callback) {
+void ConnectionManager::registerInternal(const std::string& key,
+                                         MessageCallback callback) {
   std::lock_guard<std::mutex> lock(m_mapMutex);
-  m_msgHandlers[key].push_back(callback);
+  m_msgHandlers[key].push_back({nullptr, callback});
 
   if (m_connected) {
     broker::BrokerPayload sub;
@@ -239,7 +333,8 @@ void ConnectionManager::registerInternal(const std::string& key, MessageCallback
   }
 }
 
-void ConnectionManager::registerFileInternal(const std::string& key, FileCallback callback) {
+void ConnectionManager::registerFileInternal(const std::string& key,
+                                             FileCallback callback) {
   std::lock_guard<std::mutex> lock(m_mapMutex);
   m_fileHandlers[key].push_back(callback);
 
@@ -263,7 +358,9 @@ void ConnectionManager::processingLoop() {
 
     if (key == Keys::RESET) {
       auto now = std::chrono::steady_clock::now();
-      auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - m_lastConnectionTime).count();
+      auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                         now - m_lastConnectionTime)
+                         .count();
 
       if (elapsed > 2) {
         resubscribeAll();
@@ -280,7 +377,7 @@ void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
   std::string topic = msg.topic();
   std::string data = msg.has_payload() ? msg.payload().value() : msg.raw_data();
 
-  std::vector<MessageCallback> callbacks;
+  std::vector<CallbackEntry> callbacks;
   {
     std::lock_guard<std::mutex> lock(m_mapMutex);
     auto it = m_msgHandlers.find(topic);
@@ -289,18 +386,22 @@ void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
     }
   }
 
-  for (auto& callback : callbacks) {
+  for (auto& entry : callbacks) {
     try {
-      callback(data);
+      if (entry.func) {
+        entry.func(data);
+      }
     } catch (const std::exception& e) {
-      Logger::Log(Logger::ERROR, std::string("User Callback Exception: ") + e.what());
+      Logger::Log(Logger::ERROR,
+                  std::string("User Callback Exception: ") + e.what());
     } catch (...) {
       Logger::Log(Logger::ERROR, "Unknown User Exception");
     }
   }
 }
 
-bool ConnectionManager::sendFileInternal(const std::string& key, const std::string& filePath) {
+bool ConnectionManager::sendFileInternal(const std::string& key,
+                                         const std::string& filePath) {
   if (!std::filesystem::exists(filePath)) {
     return false;
   }
@@ -317,7 +418,8 @@ bool ConnectionManager::sendFileInternal(const std::string& key, const std::stri
     }
 
     std::stringstream metaJson;
-    metaJson << "{\"filename\":\"" << filename << "\",\"size\":" << fileSize << "}";
+    metaJson << "{\"filename\":\"" << filename << "\",\"size\":" << fileSize
+             << "}";
 
     broker::BrokerPayload metaMsg;
     metaMsg.set_handler_key(std::string(Keys::FILE_META));
@@ -333,7 +435,8 @@ bool ConnectionManager::sendFileInternal(const std::string& key, const std::stri
     const size_t CHUNK_SIZE = 64 * 1024;
     std::vector<char> buffer(CHUNK_SIZE);
 
-    while (inputFile.read(buffer.data(), CHUNK_SIZE) || inputFile.gcount() > 0) {
+    while (inputFile.read(buffer.data(), CHUNK_SIZE) ||
+           inputFile.gcount() > 0) {
       if (!self->m_running) {
         return;
       }
@@ -379,13 +482,16 @@ void ConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
       state->destFilename = "unknown_" + id + ".bin";
     }
 
-    state->destFilename = std::filesystem::path(state->destFilename).filename().string();
+    state->destFilename =
+        std::filesystem::path(state->destFilename).filename().string();
 
-    state->tempPath = (std::filesystem::temp_directory_path() / (id + ".part")).string();
+    state->tempPath =
+        (std::filesystem::temp_directory_path() / (id + ".part")).string();
     state->fileHandle.open(state->tempPath, std::ios::binary);
 
     if (!state->fileHandle.is_open()) {
-      Logger::Log(Logger::ERROR, "Failed to create temp file: " + state->tempPath);
+      Logger::Log(Logger::ERROR,
+                  "Failed to create temp file: " + state->tempPath);
       return;
     }
 
@@ -408,7 +514,8 @@ void ConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
     auto state = m_transfers[id];
     state->fileHandle.close();
 
-    std::filesystem::path downloadDir = std::filesystem::current_path() / "downloads";
+    std::filesystem::path downloadDir =
+        std::filesystem::current_path() / "downloads";
     if (!std::filesystem::exists(downloadDir)) {
       std::filesystem::create_directory(downloadDir);
     }
@@ -421,14 +528,14 @@ void ConnectionManager::handleFilePacket(const broker::BrokerPayload& msg) {
       }
       std::filesystem::rename(state->tempPath, finalPath);
 
-      Logger::Log(Logger::INFO, std::string("File saved to: ") + finalPath.string());
+      Logger::Log(Logger::INFO,
+                  std::string("File saved to: ") + finalPath.string());
 
       if (m_fileHandlers.count(state->originalTopic)) {
         for (auto& callback : m_fileHandlers[state->originalTopic]) {
           callback(finalPath.string());
         }
       }
-
     } catch (const std::filesystem::filesystem_error& e) {
       Logger::Log(Logger::ERROR, std::string("File move failed: ") + e.what());
     }

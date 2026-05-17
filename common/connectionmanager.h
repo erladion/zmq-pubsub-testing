@@ -300,6 +300,8 @@ private:
   void processingLoop();
   void handleMessage(const broker::BrokerPayload& msg);
 
+  void performRegistration(const std::string& key, MessageCallback callback, void* instance);
+
 private:
   static std::shared_ptr<ConnectionManager> m_instance;
   static std::mutex m_initMutex;

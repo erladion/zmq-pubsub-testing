@@ -25,17 +25,21 @@ void ConnectionManager::init(const ConnectionConfig& config) {
 
     // Flush pending callbacks
     for (auto& p : s_pendingMsgCallbacks) {
-      m_instance->registerInternal(std::get<0>(p), std::get<1>(p), std::get<2>(p));
+      m_instance->performRegistration(std::get<0>(p), std::get<1>(p), std::get<2>(p));
     }
     s_pendingMsgCallbacks.clear();
   }
 }
 
 void ConnectionManager::shutdown() {
-  std::lock_guard<std::mutex> lock(m_initMutex);
-  if (m_instance) {
-    m_instance->m_running = false;
-    m_instance.reset();
+  std::shared_ptr<ConnectionManager> tmp;
+  {
+    std::lock_guard<std::mutex> lock(m_initMutex);
+    if (m_instance) {
+      m_instance->m_running = false;
+      tmp = m_instance;
+      m_instance.reset();
+    }
   }
 }
 
@@ -120,20 +124,19 @@ ConnectionManager::ConnectionManager(const ConnectionConfig& config) : m_clientI
     }
 
     if (connected) {
-      broker::BrokerPayload hello;
-      hello.set_handler_key(std::string(Keys::CONNECT));
-      hello.set_sender_id(m_clientId);
-      hello.set_topic("");
-
-      m_worker->writeControlMessage(hello);
+      broker::BrokerPayload connectMessage;
+      connectMessage.set_handler_key(std::string(Keys::CONNECT));
+      connectMessage.set_sender_id(m_clientId);
+      connectMessage.set_topic("");
+      m_worker->writeControlMessage(connectMessage);
 
       // Re-send subscriptions
       for (auto const& [topic, _] : m_msgHandlers) {
-        broker::BrokerPayload sub;
-        sub.set_handler_key(std::string(Keys::SUBSCRIBE));
-        sub.set_sender_id(m_clientId);
-        sub.set_topic(topic);
-        m_worker->writeControlMessage(sub);
+        broker::BrokerPayload subscribeMessage;
+        subscribeMessage.set_handler_key(std::string(Keys::SUBSCRIBE));
+        subscribeMessage.set_sender_id(m_clientId);
+        subscribeMessage.set_topic(topic);
+        m_worker->writeControlMessage(subscribeMessage);
       }
     }
   };
@@ -185,12 +188,7 @@ bool ConnectionManager::sendDataRaw(const std::string& key, const char* data, in
 }
 
 void ConnectionManager::registerCallback(const std::string& key, MessageCallback callback) {
-  std::lock_guard<std::mutex> lock(m_initMutex);
-  if (m_instance) {
-    instance().registerInternal(key, callback, nullptr);
-  } else {
-    s_pendingMsgCallbacks.push_back({key, callback, nullptr});
-  }
+  registerInternal(key, callback, nullptr);
 }
 
 void ConnectionManager::resubscribeAll() {
@@ -207,20 +205,14 @@ void ConnectionManager::resubscribeAll() {
 }
 
 void ConnectionManager::registerInternal(const std::string& key, MessageCallback callback, void* instance) {
-  if (!m_instance) {
-    return;
-  }
+  std::lock_guard<std::mutex> lock(m_initMutex);
 
-  std::lock_guard<std::mutex> lock(m_instance->m_mapMutex);
-
-  m_instance->m_msgHandlers[key].push_back({instance, callback});
-
-  if (m_instance->m_connected) {
-    broker::BrokerPayload sub;
-    sub.set_handler_key(std::string(Keys::SUBSCRIBE));
-    sub.set_sender_id(m_instance->m_clientId);
-    sub.set_topic(key);
-    m_instance->sendRawEnvelope(sub);
+  if (m_instance) {
+    // If we are initialized, pass it to the actual instance
+    m_instance->performRegistration(key, callback, instance);
+  } else {
+    // If not initialized yet, queue it up safely!
+    s_pendingMsgCallbacks.push_back({key, callback, instance});
   }
 }
 
@@ -292,5 +284,19 @@ void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
     } catch (...) {
       Logger::Log(Logger::ERROR, "Unknown User Exception");
     }
+  }
+}
+
+void ConnectionManager::performRegistration(const std::string& key, MessageCallback callback, void* instance) {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+
+  m_msgHandlers[key].push_back({instance, callback});
+
+  if (m_connected) {
+    broker::BrokerPayload sub;
+    sub.set_handler_key(std::string(Keys::SUBSCRIBE));
+    sub.set_sender_id(m_clientId);
+    sub.set_topic(key);
+    sendRawEnvelope(sub);
   }
 }

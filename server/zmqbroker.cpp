@@ -214,6 +214,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket, broker::BrokerPayload& msg
     std::lock_guard<std::mutex> lock(m_stateMutex);
 
     if (m_topicSubscribers.count(msg.topic())) {
+      zmq::message_t outData(data.begin(), data.end());
       for (const auto& id : m_topicSubscribers[msg.topic()]) {
         // Don't echo back to sender if it's a local client
         if (!isFromPeer && id == senderId) {
@@ -226,7 +227,6 @@ void ZmqBroker::processMessage(zmq::socket_t& socket, broker::BrokerPayload& msg
         }
 
         zmq::message_t outId(id.data(), id.size());
-        zmq::message_t outData(data.begin(), data.end());
 
         try {
           socket.send(outId, zmq::send_flags::sndmore);
@@ -308,14 +308,18 @@ void ZmqBroker::broadcastStats(zmq::socket_t& socket) {
 
   std::string data = statsMsg.SerializeAsString();
 
-  for (const auto& [id, state] : m_clients) {
-    // FIX: Explicit string cast for find()
-    if (state.subscriptions.find(Keys::SYS_STATS) != state.subscriptions.end()) {
+  const std::string sysStatsKey(Keys::SYS_STATS);
+  if (m_topicSubscribers.count(sysStatsKey)) {
+    zmq::message_t outData(data.begin(), data.end());
+
+    for (const auto& id : m_topicSubscribers[sysStatsKey]) {
       zmq::message_t outId(id.data(), id.size());
-      zmq::message_t outData(data.begin(), data.end());
+      zmq::message_t msgCopy;
+      msgCopy.copy(outData);
+
       try {
         socket.send(outId, zmq::send_flags::sndmore);
-        socket.send(outData, zmq::send_flags::none);
+        socket.send(msgCopy, zmq::send_flags::none);
       } catch (...) {
       }
     }

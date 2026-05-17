@@ -38,6 +38,7 @@ add_subdirectory(common)
 add_subdirectory(client1)
 add_subdirectory(client2)
 add_subdirectory(server)
+add_subdirectory(sniffer)
 
 include(GNUInstallDirs)
 install(TARGETS server client1 client2

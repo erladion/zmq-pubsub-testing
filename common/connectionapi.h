@@ -38,7 +38,6 @@ typedef struct {
   { NULL, NULL, PROTOCOL_ZMQ, 10000, 5000, COMPRESS_GZIP }
 
 typedef void (*Message_Callback)(const char* topic, const char* data, int len, void* userData);
-typedef void (*File_Callback)(const char* topic, const char* filepath, void* userData);
 typedef void (*Status_Callback)(Connection_Status status, void* userData);
 
 CONN_API int initConnection(const Connection_Config* config);
@@ -46,10 +45,8 @@ CONN_API void shutdownConnection();
 
 CONN_API int sendData(const char* topic, const char* data, int len);
 CONN_API int sendMessage(const char* topic, const char* text);
-CONN_API int sendFile(const char* topic, const char* filepath);
 
 CONN_API void registerCallback(const char* topic, Message_Callback callback, void* userData);
-CONN_API void registerFileCallback(const char* topic, File_Callback callback, void* userData);
 CONN_API void registerStatusCallback(Status_Callback callback, void* userData);
 
 #ifdef __cplusplus

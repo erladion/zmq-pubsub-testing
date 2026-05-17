@@ -13,21 +13,12 @@ constexpr std::string_view SUBSCRIBE = "__SUBSCRIBE__";
 
 constexpr std::string_view SYS_STATS = "__SYS_STATS__";
 
-// File Transfer
-constexpr std::string_view FILE_META = "__FILE_META__";
-constexpr std::string_view FILE_CHUNK = "__CHUNK__";
-constexpr std::string_view FILE_FOOTER = "__FILE_FOOTER__";
-
 constexpr bool isSystemPacket(std::string_view key) {
   return key == HEARTBEAT || key == HEARTBEAT_ACK || key == CONNECT || key == RESET;
 }
 
 constexpr bool isControlMessage(std::string_view key) {
   return key == HEARTBEAT || key == HEARTBEAT_ACK || key == SUBSCRIBE || key == CONNECT || key == RESET;
-}
-
-constexpr bool isFilePacket(std::string_view key) {
-  return key == FILE_META || key == FILE_CHUNK || key == FILE_FOOTER;
 }
 
 }  // namespace Keys

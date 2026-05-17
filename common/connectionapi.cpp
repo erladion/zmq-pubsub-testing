@@ -38,13 +38,6 @@ int sendData(const char* topic, const char* data, int len) {
   return ConnectionManager::sendDataRaw(topic, data, len) ? SUCCESS : ERROR_NO_CONNECTION;
 }
 
-int sendFile(const char* topic, const char* filepath) {
-  if (!topic || !filepath) {
-    return ERROR_INVALID_ARGS;
-  }
-  return ConnectionManager::sendFile(topic, filepath) ? SUCCESS : ERROR_NO_CONNECTION;
-}
-
 void registerCallback(const char* topic, Message_Callback callback, void* userData) {
   if (!topic || !callback) {
     return;
@@ -52,14 +45,6 @@ void registerCallback(const char* topic, Message_Callback callback, void* userDa
   ConnectionManager::registerCallback(topic, [callback, userData, t = std::string(topic)](const std::string& data) {
     callback(t.c_str(), data.c_str(), (int)data.size(), userData);
   });
-}
-
-void registerFileCallback(const char* topic, File_Callback callback, void* userData) {
-  if (!topic || !callback) {
-    return;
-  }
-  ConnectionManager::registerFileCallback(
-      topic, [callback, userData, t = std::string(topic)](const std::string& path) { callback(t.c_str(), path.c_str(), userData); });
 }
 
 void registerStatusCallback(Status_Callback callback, void* userData) {

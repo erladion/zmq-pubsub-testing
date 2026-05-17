@@ -42,6 +42,8 @@ private:
 
   void broadcastStats(zmq::socket_t& socket);
 
+  void removeClient(const std::string &clientId, const std::string &reason);
+
 private:
   std::atomic<bool> m_running;
   std::thread m_brokerThread;
@@ -73,6 +75,7 @@ private:
   // Interval counters (reset every second)
   uint64_t m_msgsInterval = 0;
   uint64_t m_bytesInterval = 0;
+
 };
 
 #endif

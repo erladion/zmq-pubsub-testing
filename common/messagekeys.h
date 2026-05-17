@@ -6,6 +6,7 @@
 namespace Keys {
 // System Handshakes
 constexpr std::string_view CONNECT = "__CONNECT__";
+constexpr std::string_view DISCONNECT = "__DISCONNECT__";
 constexpr std::string_view RESET = "__RESET__";
 constexpr std::string_view HEARTBEAT = "__HEARTBEAT__";
 constexpr std::string_view HEARTBEAT_ACK = "__HEARTBEAT_ACK__";

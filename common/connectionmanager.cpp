@@ -37,6 +37,15 @@ void ConnectionManager::shutdown() {
     std::lock_guard<std::mutex> lock(m_initMutex);
     if (m_instance) {
       m_instance->m_running = false;
+
+      if (m_instance->m_connected && m_instance->m_worker) {
+        broker::BrokerPayload byeMsg;
+        byeMsg.set_handler_key(std::string(Keys::DISCONNECT));
+        byeMsg.set_sender_id(m_instance->m_clientId);
+        byeMsg.set_topic("");
+        m_instance->m_worker->writeControlMessage(byeMsg);
+      }
+
       tmp = m_instance;
       m_instance.reset();
     }

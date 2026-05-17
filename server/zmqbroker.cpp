@@ -96,21 +96,8 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
         auto elapsed = now - it->second.lastSeen;
 
         if (elapsed > CLIENT_TIMEOUT) {
-          Logger::Log(Logger::INFO, "☠️ KILLED Zombie Client: " + it->first);
-
-          for (const auto& topic : it->second.subscriptions) {
-            auto& subs = m_topicSubscribers[topic];
-            auto subIt = std::find(subs.begin(), subs.end(), it->first);
-            if (subIt != subs.end()) {
-              *subIt = subs.back();
-              subs.pop_back();
-            }
-            if (subs.empty()) {
-              m_topicSubscribers.erase(topic);
-            }
-          }
-
-          it = m_clients.erase(it);
+          removeClient(it->first, "Timeout / Zombie");
+          it = m_clients.begin();  // Reset iterator safely after erasing
         } else {
           ++it;
         }
@@ -133,6 +120,12 @@ void ZmqBroker::processMessage(zmq::socket_t& socket, broker::BrokerPayload& msg
 
   // Local clients
   if (!isFromPeer) {
+    if (key == Keys::DISCONNECT) {
+      std::lock_guard<std::mutex> lock(m_stateMutex);
+      removeClient(senderId, "Disconnect");
+      return;
+    }
+
     bool newClient = (m_clients.find(senderId) == m_clients.end());
     {
       std::lock_guard<std::mutex> lock(m_stateMutex);
@@ -364,4 +357,24 @@ void ZmqBroker::connectToPeer(const std::string& peerAddress) {
 
   Logger::Log(Logger::INFO, "Connected to Peer: " + peerAddress);
   m_peers.push_back(std::move(worker));
+}
+
+void ZmqBroker::removeClient(const std::string& clientId, const std::string& reason) {
+  Logger::Log(Logger::INFO, "Removing Client: " + clientId + " (" + reason + ")");
+
+  auto it = m_clients.find(clientId);
+  if (it != m_clients.end()) {
+    for (const auto& topic : it->second.subscriptions) {
+      auto& subs = m_topicSubscribers[topic];
+      auto subIt = std::find(subs.begin(), subs.end(), clientId);
+      if (subIt != subs.end()) {
+        *subIt = subs.back();
+        subs.pop_back();
+      }
+      if (subs.empty()) {
+        m_topicSubscribers.erase(topic);
+      }
+    }
+    m_clients.erase(it);
+  }
 }

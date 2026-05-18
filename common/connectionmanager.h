@@ -39,30 +39,23 @@ struct DataSerializer {
 template <typename T>
 struct CallableTraits : CallableTraits<decltype(&T::operator())> {};
 
-// Match const lambdas (default for captureless lambdas)
 template <typename ClassType, typename ReturnType, typename Arg>
 struct CallableTraits<ReturnType (ClassType::*)(Arg) const> {
   using ArgType = Arg;
 };
 
-// Match mutable lambdas
 template <typename ClassType, typename ReturnType, typename Arg>
 struct CallableTraits<ReturnType (ClassType::*)(Arg)> {
   using ArgType = Arg;
 };
 
-// Match standard function pointers
 template <typename ReturnType, typename Arg>
 struct CallableTraits<ReturnType (*)(Arg)> {
   using ArgType = Arg;
 };
 
-// Match zero-argument lambdas (Forces SFINAE to fail gracefully)
 template <typename ClassType, typename ReturnType>
-struct CallableTraits<ReturnType (ClassType::*)() const> {
-  // Intentionally left blank!
-  // No 'ArgType' means SFINAE will safely ignore the 1-arg templates.
-};
+struct CallableTraits<ReturnType (ClassType::*)() const> {};
 
 class ConnectionManager : public std::enable_shared_from_this<ConnectionManager> {
 public:
@@ -77,7 +70,6 @@ public:
   template <typename T>
   static typename std::enable_if<DataSerializer<T>::is_specialized, bool>::type sendMessage(const std::string& key, const T& value) {
     std::string bytes = DataSerializer<T>::serialize(value);
-
     return instance().sendDataRaw(key, bytes.data(), static_cast<int>(bytes.size()));
   }
 
@@ -99,12 +91,11 @@ public:
   static typename std::enable_if<
       std::is_trivially_copyable<typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::value &&
           !std::is_base_of<google::protobuf::Message, typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::value &&
-          !DataSerializer<typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::is_specialized,
+          !DataSerializer<typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::is_specialized &&
+          !std::is_same<typename std::decay<typename CallableTraits<Callable>::ArgType>::type, std::string>::value,
       void>::type
   registerCallback(const std::string& key, Callable func, void* instance = nullptr) {
-    using ArgType = typename CallableTraits<Callable>::ArgType;
-    using BaseT = typename std::decay<ArgType>::type;
-
+    using BaseT = typename std::decay<typename CallableTraits<Callable>::ArgType>::type;
     registerInternal(
         key,
         [func](const std::string& raw) {
@@ -121,9 +112,7 @@ public:
   static typename std::
       enable_if<std::is_base_of<google::protobuf::Message, typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::value, void>::type
       registerCallback(const std::string& key, Callable func, void* instance = nullptr) {
-    using ArgType = typename CallableTraits<Callable>::ArgType;
-    using BaseT = typename std::decay<ArgType>::type;
-
+    using BaseT = typename std::decay<typename CallableTraits<Callable>::ArgType>::type;
     registerInternal(
         key,
         [func, key](const std::string& raw) {
@@ -140,9 +129,7 @@ public:
   template <typename Callable>
   static typename std::enable_if<DataSerializer<typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::is_specialized, void>::type
   registerCallback(const std::string& key, Callable func, void* instance = nullptr) {
-    using ArgType = typename CallableTraits<Callable>::ArgType;
-    using BaseT = typename std::decay<ArgType>::type;
-
+    using BaseT = typename std::decay<typename CallableTraits<Callable>::ArgType>::type;
     registerInternal(
         key,
         [func, key](const std::string& raw) {
@@ -156,72 +143,23 @@ public:
         instance);
   }
 
-  template <typename ClassType, typename ArgType>
-  static typename std::enable_if<DataSerializer<typename std::decay<ArgType>::type>::is_specialized, void>::type
-  registerCallback(const std::string& key, void (ClassType::*method)(ArgType), ClassType* instance) {
-    using BaseT = typename std::decay<ArgType>::type;
-
+  template <typename Callable>
+  static typename std::enable_if<std::is_same<typename std::decay<typename CallableTraits<Callable>::ArgType>::type, std::string>::value, void>::type
+  registerCallback(const std::string& key, Callable func, void* instance = nullptr) {
     registerInternal(
-        key,
-        [key, instance, method](const std::string& raw) {
-          try {
-            BaseT value = DataSerializer<BaseT>::deserialize(raw);
-            (instance->*method)(value);
-          } catch (const std::exception& e) {
-            Logger::Log(Logger::ERROR, std::string("Deserialization failed on: ") + key);
-          }
-        },
-        instance);
+        key, [func](const std::string& raw) { func(raw); }, instance);
   }
 
   template <typename ClassType, typename ArgType>
-  static typename std::enable_if<std::is_trivially_copyable<typename std::decay<ArgType>::type>::value &&
-                                     !std::is_base_of<google::protobuf::Message, typename std::decay<ArgType>::type>::value,
-                                 void>::type
-  registerCallback(const std::string& key, void (ClassType::*method)(ArgType), ClassType* instance) {
-    using BaseT = typename std::decay<ArgType>::type;
-
-    registerInternal(
-        key,
-        [key, instance, method](const std::string& raw) {
-          if (raw.size() == sizeof(BaseT)) {
-            BaseT value;
-            std::memcpy(&value, raw.data(), sizeof(BaseT));
-
-            (instance->*method)(value);
-          }
-        },
-        instance);
-  }
-
-  template <typename ClassType>
-  static void registerCallback(const std::string& key, void (ClassType::*method)(const std::string&), ClassType* instance) {
-    registerInternal(
-        key, [instance, method](const std::string& msg) { (instance->*method)(msg); }, instance);
-  }
-
-  template <typename ClassType, typename ArgType>
-  static typename std::enable_if<std::is_base_of<google::protobuf::Message, typename std::decay<ArgType>::type>::value, void>::type
-  registerCallback(const std::string& key, void (ClassType::*method)(ArgType), ClassType* instance) {
-    using BaseT = typename std::decay<ArgType>::type;
-
-    registerInternal(
-        key,
-        [instance, method, key](const std::string& raw) {
-          BaseT msg;
-          if (tryUnpack(raw, msg)) {
-            (instance->*method)(msg);
-          } else {
-            Logger::Log(Logger::ERROR, "Failed to unpack message for key: " + key);
-          }
-        },
-        instance);
+  static void registerCallback(const std::string& key, void (ClassType::*method)(ArgType), ClassType* instance) {
+    registerCallback(
+        key, [instance, method](ArgType arg) { (instance->*method)(std::forward<ArgType>(arg)); }, instance);
   }
 
   template <typename ClassType>
   static void registerCallback(const std::string& key, void (ClassType::*method)(), ClassType* instance) {
-    registerInternal(
-        key, [instance, method](const std::string& /* ignored */) { (instance->*method)(); }, instance);
+    registerCallback(
+        key, [instance, method]() { (instance->*method)(); }, instance);
   }
 
   static void registerCallback(const std::string& key, void (*func)(), void* instance = nullptr) {
@@ -265,7 +203,6 @@ public:
     if (sendRequest(requestTopic, payloadData, rawResponse, timeoutMs)) {
       return tryUnpack(rawResponse, outResponse);
     }
-
     return false;
   }
 
@@ -293,8 +230,7 @@ private:
   void handleMessage(const broker::BrokerPayload& msg);
 
   void performRegistration(const std::string& key, MessageCallback callback, void* instance);
-
-  broker::BrokerPayload createControlEnvelope(const std::string_view &controlKey, const std::string &topic);
+  broker::BrokerPayload createControlEnvelope(const std::string_view& controlKey, const std::string& topic);
 
 private:
   static std::shared_ptr<ConnectionManager> m_instance;

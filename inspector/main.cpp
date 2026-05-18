@@ -1,3 +1,5 @@
+#include <QApplication>
+
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -6,6 +8,8 @@
 
 #include "broker.pb.h"
 #include "messagekeys.h"
+
+#include "mainwindow.h"
 
 // ANSI Color Codes for the Terminal UI
 #define RESET "\033[0m"
@@ -30,21 +34,28 @@ std::string getCurrentTime() {
   return std::string(buffer) + "." + std::to_string(ms.count());
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+  QApplication a(argc, argv);
+
+  MainWindow mw;
+  mw.show();
+
+  return a.exec();
+  /*
   zmq::context_t ctx(1);
-  zmq::socket_t sniffer(ctx, ZMQ_SUB);
+  zmq::socket_t inspectorSocket(ctx, ZMQ_SUB);
 
   // Connect to the Broker's Mirror Port
-  sniffer.connect("tcp://127.0.0.1:5556");
-  sniffer.set(zmq::sockopt::subscribe, "");  // Subscribe to ALL topics
+  inspectorSocket.connect("tcp://127.0.0.1:5556");
+  inspectorSocket.set(zmq::sockopt::subscribe, "");  // Subscribe to ALL topics
 
   std::cout << "\n" << CYAN << "==============================================================" << RESET << "\n";
-  std::cout << MAGENTA << " 🦈 ZMQ WIRESHARK SNIFFER ONLINE - LISTENING ON PORT 5556" << RESET << "\n";
+  std::cout << MAGENTA << " 🦈 ZMQ INSPECTOR ONLINE - LISTENING ON PORT 5556" << RESET << "\n";
   std::cout << CYAN << "==============================================================" << RESET << "\n\n";
 
   while (true) {
     zmq::message_t msg;
-    if (sniffer.recv(msg, zmq::recv_flags::none)) {
+    if (inspectorSocket.recv(msg, zmq::recv_flags::none)) {
       broker::BrokerPayload payload;
 
       if (payload.ParseFromArray(msg.data(), msg.size())) {
@@ -88,4 +99,5 @@ int main() {
     }
   }
   return 0;
+  */
 }

@@ -39,9 +39,9 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
   socket.set(zmq::sockopt::linger, 0);
   socket.set(zmq::sockopt::router_mandatory, 1);
 
-  zmq::socket_t snifferTap(m_context, ZMQ_PUB);
-  snifferTap.set(zmq::sockopt::linger, 0);
-  snifferTap.bind("tcp://*:5556");  // The dedicated sniffing port
+  zmq::socket_t inspectorSocket(m_context, ZMQ_PUB);
+  inspectorSocket.set(zmq::sockopt::linger, 0);
+  inspectorSocket.bind("tcp://*:5556");  // The dedicated inspector port
   Logger::Log(Logger::INFO, "Wireshark Mirror Port active on tcp://*:5556");
 
   for (const auto& addr : addresses) {
@@ -79,7 +79,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
           broker::BrokerPayload msg;
           if (msg.ParseFromArray(payload.data(), payload.size())) {
-            processMessage(socket, snifferTap, msg, identity.to_string(), false);
+            processMessage(socket, inspectorSocket, msg, identity.to_string(), false);
           }
         }
       }
@@ -88,7 +88,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
     // Poll for peer messages
     broker::BrokerPayload peerMsg;
     while (m_peerInboundQueue.try_pop(peerMsg)) {
-      processMessage(socket, snifferTap, peerMsg, "PEER", true);
+      processMessage(socket, inspectorSocket, peerMsg, "PEER", true);
     }
 
     auto now = std::chrono::steady_clock::now();
@@ -121,13 +121,13 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 }
 
 void ZmqBroker::processMessage(zmq::socket_t& socket,
-                               zmq::socket_t& snifferSocket,
+                               zmq::socket_t& inspectorSocket,
                                broker::BrokerPayload& msg,
                                const std::string& senderId,
                                bool isFromPeer) {
-  std::string sniffData = msg.SerializeAsString();
-  zmq::message_t sniffMsg(sniffData.begin(), sniffData.end());
-  snifferSocket.send(sniffMsg, zmq::send_flags::dontwait);
+  std::string inspectData = msg.SerializeAsString();
+  zmq::message_t inspectorMsg(inspectData.begin(), inspectData.end());
+  inspectorSocket.send(inspectorMsg, zmq::send_flags::dontwait);
 
   std::string key = msg.handler_key();
 
@@ -156,9 +156,6 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
       resetMsg.set_topic("");
       std::string resetData = resetMsg.SerializeAsString();
 
-      zmq::message_t sniffReset(resetData.begin(), resetData.end());
-      snifferSocket.send(sniffReset, zmq::send_flags::dontwait);
-
       zmq::message_t outData(resetData.begin(), resetData.end());
 
       try {
@@ -180,11 +177,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
         ack.set_topic("");
         std::string ackData = ack.SerializeAsString();
 
-        zmq::message_t sniffAck(ackData.begin(), ackData.end());
-        snifferSocket.send(sniffAck, zmq::send_flags::dontwait);
-
         zmq::message_t outData(ackData.begin(), ackData.end());
-
         try {
           socket.send(outId, zmq::send_flags::sndmore);
           socket.send(outData, zmq::send_flags::none);

@@ -37,7 +37,7 @@ public:
 
 private:
   void run(const std::vector<std::string>& addresses);
-  void processMessage(zmq::socket_t &socket, zmq::socket_t &snifferSocket, broker::BrokerPayload &msg, const std::string &senderId, bool isFromPeer);
+  void processMessage(zmq::socket_t &socket, zmq::socket_t &inspectorSocket, broker::BrokerPayload &msg, const std::string &senderId, bool isFromPeer);
   bool isDuplicate(const std::string& uuid);
 
   void broadcastStats(zmq::socket_t& socket);

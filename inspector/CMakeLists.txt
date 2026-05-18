@@ -1,0 +1,21 @@
+add_executable(inspector
+  main.cpp
+  ../zmq.hpp
+  ../zmq_addon.hpp
+  datamodel.h
+  inspectorworker.h inspectorworker.cpp
+  mainwindow.h mainwindow.cpp
+  protoutils.h
+  hexutils.h
+)
+
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Gui)
+
+target_link_libraries(inspector
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    ZmqLib
+    zmq
+)

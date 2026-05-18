@@ -294,6 +294,8 @@ private:
 
   void performRegistration(const std::string& key, MessageCallback callback, void* instance);
 
+  broker::BrokerPayload createControlEnvelope(const std::string_view &controlKey, const std::string &topic);
+
 private:
   static std::shared_ptr<ConnectionManager> m_instance;
   static std::mutex m_initMutex;

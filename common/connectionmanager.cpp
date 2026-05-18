@@ -139,19 +139,11 @@ ConnectionManager::ConnectionManager(const ConnectionConfig& config) : m_clientI
     }
 
     if (connected) {
-      broker::BrokerPayload connectMessage;
-      connectMessage.set_handler_key(Keys::CONNECT);
-      connectMessage.set_sender_id(m_clientId);
-      connectMessage.set_topic("");
-      m_worker->writeControlMessage(connectMessage);
+      sendRawEnvelope(createControlEnvelope(Keys::CONNECT, ""));
 
       // Re-send subscriptions
       for (auto const& [topic, _] : m_msgHandlers) {
-        broker::BrokerPayload subscribeMessage;
-        subscribeMessage.set_handler_key(Keys::SUBSCRIBE);
-        subscribeMessage.set_sender_id(m_clientId);
-        subscribeMessage.set_topic(topic);
-        m_worker->writeControlMessage(subscribeMessage);
+        sendRawEnvelope(createControlEnvelope(Keys::SUBSCRIBE, topic));
       }
     }
   };
@@ -211,11 +203,7 @@ void ConnectionManager::resubscribeAll() {
   Logger::Log(Logger::INFO, "Server requested Reset. Re-sending all subscriptions...");
 
   for (auto const& [topic, _] : m_msgHandlers) {
-    broker::BrokerPayload sub;
-    sub.set_handler_key(Keys::SUBSCRIBE);
-    sub.set_sender_id(m_clientId);
-    sub.set_topic(topic);
-    sendRawEnvelope(sub);
+    sendRawEnvelope(createControlEnvelope(Keys::SUBSCRIBE, topic));
   }
 }
 
@@ -308,10 +296,14 @@ void ConnectionManager::performRegistration(const std::string& key, MessageCallb
   m_msgHandlers[key].push_back({instance, callback});
 
   if (m_connected) {
-    broker::BrokerPayload sub;
-    sub.set_handler_key(std::string(Keys::SUBSCRIBE));
-    sub.set_sender_id(m_clientId);
-    sub.set_topic(key);
-    sendRawEnvelope(sub);
+    sendRawEnvelope(createControlEnvelope(Keys::SUBSCRIBE, key));
   }
+}
+
+broker::BrokerPayload ConnectionManager::createControlEnvelope(const std::string_view& controlKey, const std::string& topic) {
+  broker::BrokerPayload msg;
+  msg.set_handler_key(controlKey);
+  msg.set_sender_id(m_clientId);
+  msg.set_topic(topic);
+  return msg;
 }

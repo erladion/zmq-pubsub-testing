@@ -3,8 +3,10 @@ add_executable(inspector
   ../zmq.hpp
   ../zmq_addon.hpp
   datamodel.h
-  inspectorworker.h inspectorworker.cpp
-  mainwindow.h mainwindow.cpp
+  inspectorworker.h
+  inspectorworker.cpp
+  mainwindow.h
+  mainwindow.cpp
   protoutils.h
   hexutils.h
 )

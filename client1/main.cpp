@@ -2,10 +2,18 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
 
 #include <iostream>
 
 #include "connectionmanager.h"
+
+struct TestStruct {
+  int d;
+  double dd;
+  float ddd;
+  unsigned long long h;
+};
 
 int main(int argc, char* argv[]) {
   QCoreApplication a(argc, argv);
@@ -22,6 +30,18 @@ int main(int argc, char* argv[]) {
 
     ConnectionManager::sendMessage("MessageReceived", "Send a response");
   });
+
+  ConnectionManager::registerCallback("struct", [](const TestStruct& s) {
+    std::cerr << s.d << std::endl;
+    std::cerr << s.dd << std::endl;
+    std::cerr << s.ddd << std::endl;
+    std::cerr << s.h << std::endl;
+  });
+
+  QTimer t;
+  QObject::connect(&t, &QTimer::timeout, []() { ConnectionManager::sendMessage("Hejsan", 3); });
+
+  t.start(1000);
 
   return a.exec();
 }

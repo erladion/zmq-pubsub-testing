@@ -6,6 +6,13 @@
 
 #include "connectionmanager.h"
 
+struct TestStruct {
+  int d;
+  double dd;
+  float ddd;
+  unsigned long long h;
+};
+
 int main(int argc, char* argv[]) {
   QCoreApplication a(argc, argv);
 
@@ -27,6 +34,18 @@ int main(int argc, char* argv[]) {
 
     ConnectionManager::sendMessage("test", QString(QJsonDocument(payload).toJson()).toStdString());
   });
+
+  QObject::connect(&t, &QTimer::timeout, []() {
+    TestStruct s;
+    s.d = 42;
+    s.dd = 1337.0;
+    s.ddd = 3.1415f;
+    s.h = QDateTime::currentMSecsSinceEpoch();
+
+    ConnectionManager::sendMessage("struct", s);
+  });
+
+  ConnectionManager::registerCallback("Hejsan", [](int t) { std::cout << t << std::endl; });
 
   t.start(2000);
 

@@ -21,3 +21,19 @@ service BrokerService {
   // Bi-directional stream: One connection, two-way traffic
   rpc MessageStream (stream BrokerPayload) returns (stream BrokerPayload);
 }
+
+message ClientInfo {
+    string id = 1;
+    repeated string subscriptions = 2;
+}
+
+message SystemStats {
+    string broker_id = 1;
+    int32 clients_count = 2;
+    int32 peers_count = 3;
+    int32 msgs_per_sec = 4;
+    double kb_per_sec = 5;
+    int64 total_msgs = 6;
+    int64 uptime_sec = 7;
+    repeated ClientInfo connected_clients = 8;
+}

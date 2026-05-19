@@ -112,7 +112,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
     // Broadcast stats
     if (now - m_lastStatsTime > std::chrono::seconds(1)) {
-      broadcastStats(socket);
+      broadcastStats(socket, inspectorSocket);
       m_lastStatsTime = now;
       m_msgsInterval = 0;
       m_bytesInterval = 0;
@@ -289,55 +289,42 @@ bool ZmqBroker::isDuplicate(const std::string& uuid) {
   return false;
 }
 
-void ZmqBroker::broadcastStats(zmq::socket_t& socket) {
+void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSocket) {
   std::lock_guard<std::mutex> lock(m_stateMutex);
 
   auto uptime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - m_startTime).count();
   const double kbSec = static_cast<double>(m_bytesInterval) / 1024.0;
 
-  std::stringstream ss;
-  ss << "{";
-  ss << "\"type\":\"stats_update\",";
-  ss << "\"broker_id\":\"" << m_brokerId << "\",";
-  ss << "\"clients\":" << m_clients.size() << ",";
-  ss << "\"peers_count\":" << m_peers.size() << ",";
-  ss << "\"msgs_per_sec\":" << m_msgsInterval << ",";
-  ss << "\"kb_per_sec\":" << kbSec << ",";
-  ss << "\"total_msgs\":" << m_totalMessages << ",";
-  ss << "\"uptime_sec\":" << uptime;
+  broker::SystemStats stats;
+  stats.set_broker_id(m_brokerId);
+  stats.set_clients_count(m_clients.size());
+  stats.set_peers_count(m_peers.size());
+  stats.set_msgs_per_sec(m_msgsInterval);
+  stats.set_kb_per_sec(kbSec);
+  stats.set_total_msgs(m_totalMessages);
+  stats.set_uptime_sec(uptime);
 
-  ss << ", \"connected_clients\": [";
-
-  bool firstClient = true;
   for (const auto& [id, state] : m_clients) {
-    if (!firstClient)
-      ss << ",";
-    firstClient = false;
+    broker::ClientInfo* clientInfo = stats.add_connected_clients();
+    clientInfo->set_id(id);
 
-    ss << "{";
-    ss << "\"id\": \"" << id << "\",";
-    ss << "\"subscriptions\": [";
-
-    bool firstSub = true;
     for (const auto& topic : state.subscriptions) {
-      if (!firstSub)
-        ss << ",";
-      firstSub = false;
-      ss << "\"" << topic << "\"";
+      clientInfo->add_subscriptions(topic);
     }
-    ss << "]}";
   }
-  ss << "]}";
 
-  broker::BrokerPayload statsMsg;
-  statsMsg.set_handler_key(Keys::SYS_STATS);
-  statsMsg.set_topic(Keys::SYS_STATS);
-  statsMsg.set_sender_id("BROKER_SYSTEM");
-  statsMsg.set_raw_data(ss.str());
+  broker::BrokerPayload envelope;
+  envelope.set_handler_key(Keys::SYS_STATS);
+  envelope.set_topic(Keys::SYS_STATS);
+  envelope.set_sender_id("BROKER_SYSTEM");
+  envelope.mutable_payload()->PackFrom(stats);  // Use Any to pack the struct natively
 
-  std::string data = statsMsg.SerializeAsString();
-
+  std::string data = envelope.SerializeAsString();
   const std::string sysStatsKey(Keys::SYS_STATS);
+
+  zmq::message_t inspectorMsg(data.begin(), data.end());
+  inspectorSocket.send(inspectorMsg, zmq::send_flags::dontwait);
+
   if (m_topicSubscribers.count(sysStatsKey)) {
     zmq::message_t outData(data.begin(), data.end());
 

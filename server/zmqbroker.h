@@ -40,7 +40,7 @@ private:
   void processMessage(zmq::socket_t &socket, zmq::socket_t &inspectorSocket, broker::BrokerPayload &msg, const std::string &senderId, bool isFromPeer);
   bool isDuplicate(const std::string& uuid);
 
-  void broadcastStats(zmq::socket_t& socket);
+  void broadcastStats(zmq::socket_t &socket, zmq::socket_t &inspectorSocket);
 
   void removeClient(const std::string &clientId, const std::string &reason);
 

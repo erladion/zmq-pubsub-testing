@@ -11,9 +11,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_PREFIX_PATH "/home/erladion/.local/")
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
-
 find_package(Protobuf REQUIRED)
 find_package(absl CONFIG REQUIRED)
 find_package(ZeroMQ QUIET)

@@ -58,6 +58,14 @@ class BrokerPayload;
 struct BrokerPayloadDefaultTypeInternal;
 extern BrokerPayloadDefaultTypeInternal _BrokerPayload_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull BrokerPayload_class_data_;
+class ClientInfo;
+struct ClientInfoDefaultTypeInternal;
+extern ClientInfoDefaultTypeInternal _ClientInfo_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull ClientInfo_class_data_;
+class SystemStats;
+struct SystemStatsDefaultTypeInternal;
+extern SystemStatsDefaultTypeInternal _SystemStats_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SystemStats_class_data_;
 }  // namespace broker
 namespace google {
 namespace protobuf {
@@ -69,6 +77,513 @@ namespace broker {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class ClientInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:broker.ClientInfo) */ {
+ public:
+  inline ClientInfo() : ClientInfo(nullptr) {}
+  ~ClientInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClientInfo* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClientInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR ClientInfo(::google::protobuf::internal::ConstantInitialized);
+
+  inline ClientInfo(const ClientInfo& from) : ClientInfo(nullptr, from) {}
+  inline ClientInfo(ClientInfo&& from) noexcept
+      : ClientInfo(nullptr, ::std::move(from)) {}
+  inline ClientInfo& operator=(const ClientInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClientInfo& operator=(ClientInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ClientInfo& default_instance() {
+    return *reinterpret_cast<const ClientInfo*>(
+        &_ClientInfo_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(ClientInfo& a, ClientInfo& b) { a.Swap(&b); }
+  inline void Swap(ClientInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClientInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ClientInfo* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClientInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClientInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClientInfo& from) { ClientInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClientInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "broker.ClientInfo"; }
+
+ protected:
+  explicit ClientInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClientInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClientInfo& from);
+  ClientInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClientInfo&& from) noexcept
+      : ClientInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSubscriptionsFieldNumber = 2,
+    kIdFieldNumber = 1,
+  };
+  // repeated string subscriptions = 2;
+  int subscriptions_size() const;
+  private:
+  int _internal_subscriptions_size() const;
+
+  public:
+  void clear_subscriptions() ;
+  const ::std::string& subscriptions(int index) const;
+  ::std::string* PROTOBUF_NONNULL mutable_subscriptions(int index);
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_subscriptions(int index, Arg_&& value, Args_... args);
+  ::std::string* PROTOBUF_NONNULL add_subscriptions();
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void add_subscriptions(Arg_&& value, Args_... args);
+  const ::google::protobuf::RepeatedPtrField<::std::string>& subscriptions() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL mutable_subscriptions();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::std::string>& _internal_subscriptions() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL _internal_mutable_subscriptions();
+
+  public:
+  // string id = 1;
+  void clear_id() ;
+  const ::std::string& id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_id();
+  void set_allocated_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_id();
+
+  public:
+  // @@protoc_insertion_point(class_scope:broker.ClientInfo)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 41,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClientInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField<::std::string> subscriptions_;
+    ::google::protobuf::internal::ArenaStringPtr id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_broker_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull ClientInfo_class_data_;
+// -------------------------------------------------------------------
+
+class SystemStats final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:broker.SystemStats) */ {
+ public:
+  inline SystemStats() : SystemStats(nullptr) {}
+  ~SystemStats() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SystemStats* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SystemStats));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR SystemStats(::google::protobuf::internal::ConstantInitialized);
+
+  inline SystemStats(const SystemStats& from) : SystemStats(nullptr, from) {}
+  inline SystemStats(SystemStats&& from) noexcept
+      : SystemStats(nullptr, ::std::move(from)) {}
+  inline SystemStats& operator=(const SystemStats& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SystemStats& operator=(SystemStats&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const SystemStats& default_instance() {
+    return *reinterpret_cast<const SystemStats*>(
+        &_SystemStats_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(SystemStats& a, SystemStats& b) { a.Swap(&b); }
+  inline void Swap(SystemStats* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SystemStats* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SystemStats* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SystemStats>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SystemStats& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SystemStats& from) { SystemStats::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SystemStats* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "broker.SystemStats"; }
+
+ protected:
+  explicit SystemStats(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SystemStats(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SystemStats& from);
+  SystemStats(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SystemStats&& from) noexcept
+      : SystemStats(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kConnectedClientsFieldNumber = 8,
+    kBrokerIdFieldNumber = 1,
+    kClientsCountFieldNumber = 2,
+    kPeersCountFieldNumber = 3,
+    kKbPerSecFieldNumber = 5,
+    kTotalMsgsFieldNumber = 6,
+    kUptimeSecFieldNumber = 7,
+    kMsgsPerSecFieldNumber = 4,
+  };
+  // repeated .broker.ClientInfo connected_clients = 8;
+  int connected_clients_size() const;
+  private:
+  int _internal_connected_clients_size() const;
+
+  public:
+  void clear_connected_clients() ;
+  ::broker::ClientInfo* PROTOBUF_NONNULL mutable_connected_clients(int index);
+  ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>* PROTOBUF_NONNULL mutable_connected_clients();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>& _internal_connected_clients() const;
+  ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>* PROTOBUF_NONNULL _internal_mutable_connected_clients();
+  public:
+  const ::broker::ClientInfo& connected_clients(int index) const;
+  ::broker::ClientInfo* PROTOBUF_NONNULL add_connected_clients();
+  const ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>& connected_clients() const;
+  // string broker_id = 1;
+  void clear_broker_id() ;
+  const ::std::string& broker_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_broker_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_broker_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_broker_id();
+  void set_allocated_broker_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_broker_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_broker_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_broker_id();
+
+  public:
+  // int32 clients_count = 2;
+  void clear_clients_count() ;
+  ::int32_t clients_count() const;
+  void set_clients_count(::int32_t value);
+
+  private:
+  ::int32_t _internal_clients_count() const;
+  void _internal_set_clients_count(::int32_t value);
+
+  public:
+  // int32 peers_count = 3;
+  void clear_peers_count() ;
+  ::int32_t peers_count() const;
+  void set_peers_count(::int32_t value);
+
+  private:
+  ::int32_t _internal_peers_count() const;
+  void _internal_set_peers_count(::int32_t value);
+
+  public:
+  // double kb_per_sec = 5;
+  void clear_kb_per_sec() ;
+  double kb_per_sec() const;
+  void set_kb_per_sec(double value);
+
+  private:
+  double _internal_kb_per_sec() const;
+  void _internal_set_kb_per_sec(double value);
+
+  public:
+  // int64 total_msgs = 6;
+  void clear_total_msgs() ;
+  ::int64_t total_msgs() const;
+  void set_total_msgs(::int64_t value);
+
+  private:
+  ::int64_t _internal_total_msgs() const;
+  void _internal_set_total_msgs(::int64_t value);
+
+  public:
+  // int64 uptime_sec = 7;
+  void clear_uptime_sec() ;
+  ::int64_t uptime_sec() const;
+  void set_uptime_sec(::int64_t value);
+
+  private:
+  ::int64_t _internal_uptime_sec() const;
+  void _internal_set_uptime_sec(::int64_t value);
+
+  public:
+  // int32 msgs_per_sec = 4;
+  void clear_msgs_per_sec() ;
+  ::int32_t msgs_per_sec() const;
+  void set_msgs_per_sec(::int32_t value);
+
+  private:
+  ::int32_t _internal_msgs_per_sec() const;
+  void _internal_set_msgs_per_sec(::int32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:broker.SystemStats)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 8,
+                                   1, 44,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SystemStats& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::broker::ClientInfo > connected_clients_;
+    ::google::protobuf::internal::ArenaStringPtr broker_id_;
+    ::int32_t clients_count_;
+    ::int32_t peers_count_;
+    double kb_per_sec_;
+    ::int64_t total_msgs_;
+    ::int64_t uptime_sec_;
+    ::int32_t msgs_per_sec_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_broker_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SystemStats_class_data_;
 // -------------------------------------------------------------------
 
 class BrokerPayload final : public ::google::protobuf::Message
@@ -1019,6 +1534,402 @@ inline void BrokerPayload::set_allocated_raw_data(::std::string* PROTOBUF_NULLAB
     _impl_.raw_data_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:broker.BrokerPayload.raw_data)
+}
+
+// -------------------------------------------------------------------
+
+// ClientInfo
+
+// string id = 1;
+inline void ClientInfo::clear_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.id_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::std::string& ClientInfo::id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:broker.ClientInfo.id)
+  return _internal_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClientInfo::set_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:broker.ClientInfo.id)
+}
+inline ::std::string* PROTOBUF_NONNULL ClientInfo::mutable_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_id();
+  // @@protoc_insertion_point(field_mutable:broker.ClientInfo.id)
+  return _s;
+}
+inline const ::std::string& ClientInfo::_internal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.id_.Get();
+}
+inline void ClientInfo::_internal_set_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClientInfo::_internal_mutable_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  return _impl_.id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClientInfo::release_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:broker.ClientInfo.id)
+  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  auto* released = _impl_.id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClientInfo::set_allocated_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  _impl_.id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.id_.IsDefault()) {
+    _impl_.id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:broker.ClientInfo.id)
+}
+
+// repeated string subscriptions = 2;
+inline int ClientInfo::_internal_subscriptions_size() const {
+  return _internal_subscriptions().size();
+}
+inline int ClientInfo::subscriptions_size() const {
+  return _internal_subscriptions_size();
+}
+inline void ClientInfo::clear_subscriptions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.subscriptions_.Clear();
+}
+inline ::std::string* PROTOBUF_NONNULL ClientInfo::add_subscriptions()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::std::string* _s = _internal_mutable_subscriptions()->Add();
+  // @@protoc_insertion_point(field_add_mutable:broker.ClientInfo.subscriptions)
+  return _s;
+}
+inline const ::std::string& ClientInfo::subscriptions(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:broker.ClientInfo.subscriptions)
+  return _internal_subscriptions().Get(index);
+}
+inline ::std::string* PROTOBUF_NONNULL ClientInfo::mutable_subscriptions(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:broker.ClientInfo.subscriptions)
+  return _internal_mutable_subscriptions()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void ClientInfo::set_subscriptions(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(*_internal_mutable_subscriptions()->Mutable(index), ::std::forward<Arg_>(value),
+                        args... );
+  // @@protoc_insertion_point(field_set:broker.ClientInfo.subscriptions)
+}
+template <typename Arg_, typename... Args_>
+inline void ClientInfo::add_subscriptions(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(*_internal_mutable_subscriptions(),
+                               ::std::forward<Arg_>(value),
+                               args... );
+  // @@protoc_insertion_point(field_add:broker.ClientInfo.subscriptions)
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>& ClientInfo::subscriptions()
+    const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:broker.ClientInfo.subscriptions)
+  return _internal_subscriptions();
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+ClientInfo::mutable_subscriptions() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:broker.ClientInfo.subscriptions)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_subscriptions();
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>&
+ClientInfo::_internal_subscriptions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.subscriptions_;
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+ClientInfo::_internal_mutable_subscriptions() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.subscriptions_;
+}
+
+// -------------------------------------------------------------------
+
+// SystemStats
+
+// string broker_id = 1;
+inline void SystemStats::clear_broker_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.broker_id_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::std::string& SystemStats::broker_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.broker_id)
+  return _internal_broker_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SystemStats::set_broker_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.broker_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:broker.SystemStats.broker_id)
+}
+inline ::std::string* PROTOBUF_NONNULL SystemStats::mutable_broker_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_broker_id();
+  // @@protoc_insertion_point(field_mutable:broker.SystemStats.broker_id)
+  return _s;
+}
+inline const ::std::string& SystemStats::_internal_broker_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.broker_id_.Get();
+}
+inline void SystemStats::_internal_set_broker_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.broker_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SystemStats::_internal_mutable_broker_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  return _impl_.broker_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SystemStats::release_broker_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:broker.SystemStats.broker_id)
+  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  auto* released = _impl_.broker_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.broker_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SystemStats::set_allocated_broker_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  _impl_.broker_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.broker_id_.IsDefault()) {
+    _impl_.broker_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:broker.SystemStats.broker_id)
+}
+
+// int32 clients_count = 2;
+inline void SystemStats::clear_clients_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.clients_count_ = 0;
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline ::int32_t SystemStats::clients_count() const {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.clients_count)
+  return _internal_clients_count();
+}
+inline void SystemStats::set_clients_count(::int32_t value) {
+  _internal_set_clients_count(value);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  // @@protoc_insertion_point(field_set:broker.SystemStats.clients_count)
+}
+inline ::int32_t SystemStats::_internal_clients_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.clients_count_;
+}
+inline void SystemStats::_internal_set_clients_count(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.clients_count_ = value;
+}
+
+// int32 peers_count = 3;
+inline void SystemStats::clear_peers_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.peers_count_ = 0;
+  _impl_._has_bits_[0] &= ~0x00000004u;
+}
+inline ::int32_t SystemStats::peers_count() const {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.peers_count)
+  return _internal_peers_count();
+}
+inline void SystemStats::set_peers_count(::int32_t value) {
+  _internal_set_peers_count(value);
+  _impl_._has_bits_[0] |= 0x00000004u;
+  // @@protoc_insertion_point(field_set:broker.SystemStats.peers_count)
+}
+inline ::int32_t SystemStats::_internal_peers_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.peers_count_;
+}
+inline void SystemStats::_internal_set_peers_count(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.peers_count_ = value;
+}
+
+// int32 msgs_per_sec = 4;
+inline void SystemStats::clear_msgs_per_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.msgs_per_sec_ = 0;
+  _impl_._has_bits_[0] &= ~0x00000040u;
+}
+inline ::int32_t SystemStats::msgs_per_sec() const {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.msgs_per_sec)
+  return _internal_msgs_per_sec();
+}
+inline void SystemStats::set_msgs_per_sec(::int32_t value) {
+  _internal_set_msgs_per_sec(value);
+  _impl_._has_bits_[0] |= 0x00000040u;
+  // @@protoc_insertion_point(field_set:broker.SystemStats.msgs_per_sec)
+}
+inline ::int32_t SystemStats::_internal_msgs_per_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.msgs_per_sec_;
+}
+inline void SystemStats::_internal_set_msgs_per_sec(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.msgs_per_sec_ = value;
+}
+
+// double kb_per_sec = 5;
+inline void SystemStats::clear_kb_per_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kb_per_sec_ = 0;
+  _impl_._has_bits_[0] &= ~0x00000008u;
+}
+inline double SystemStats::kb_per_sec() const {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.kb_per_sec)
+  return _internal_kb_per_sec();
+}
+inline void SystemStats::set_kb_per_sec(double value) {
+  _internal_set_kb_per_sec(value);
+  _impl_._has_bits_[0] |= 0x00000008u;
+  // @@protoc_insertion_point(field_set:broker.SystemStats.kb_per_sec)
+}
+inline double SystemStats::_internal_kb_per_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.kb_per_sec_;
+}
+inline void SystemStats::_internal_set_kb_per_sec(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kb_per_sec_ = value;
+}
+
+// int64 total_msgs = 6;
+inline void SystemStats::clear_total_msgs() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_msgs_ = ::int64_t{0};
+  _impl_._has_bits_[0] &= ~0x00000010u;
+}
+inline ::int64_t SystemStats::total_msgs() const {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.total_msgs)
+  return _internal_total_msgs();
+}
+inline void SystemStats::set_total_msgs(::int64_t value) {
+  _internal_set_total_msgs(value);
+  _impl_._has_bits_[0] |= 0x00000010u;
+  // @@protoc_insertion_point(field_set:broker.SystemStats.total_msgs)
+}
+inline ::int64_t SystemStats::_internal_total_msgs() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_msgs_;
+}
+inline void SystemStats::_internal_set_total_msgs(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_msgs_ = value;
+}
+
+// int64 uptime_sec = 7;
+inline void SystemStats::clear_uptime_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.uptime_sec_ = ::int64_t{0};
+  _impl_._has_bits_[0] &= ~0x00000020u;
+}
+inline ::int64_t SystemStats::uptime_sec() const {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.uptime_sec)
+  return _internal_uptime_sec();
+}
+inline void SystemStats::set_uptime_sec(::int64_t value) {
+  _internal_set_uptime_sec(value);
+  _impl_._has_bits_[0] |= 0x00000020u;
+  // @@protoc_insertion_point(field_set:broker.SystemStats.uptime_sec)
+}
+inline ::int64_t SystemStats::_internal_uptime_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.uptime_sec_;
+}
+inline void SystemStats::_internal_set_uptime_sec(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.uptime_sec_ = value;
+}
+
+// repeated .broker.ClientInfo connected_clients = 8;
+inline int SystemStats::_internal_connected_clients_size() const {
+  return _internal_connected_clients().size();
+}
+inline int SystemStats::connected_clients_size() const {
+  return _internal_connected_clients_size();
+}
+inline void SystemStats::clear_connected_clients() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.connected_clients_.Clear();
+}
+inline ::broker::ClientInfo* PROTOBUF_NONNULL SystemStats::mutable_connected_clients(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:broker.SystemStats.connected_clients)
+  return _internal_mutable_connected_clients()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>* PROTOBUF_NONNULL SystemStats::mutable_connected_clients()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:broker.SystemStats.connected_clients)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_connected_clients();
+}
+inline const ::broker::ClientInfo& SystemStats::connected_clients(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:broker.SystemStats.connected_clients)
+  return _internal_connected_clients().Get(index);
+}
+inline ::broker::ClientInfo* PROTOBUF_NONNULL SystemStats::add_connected_clients()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::broker::ClientInfo* _add = _internal_mutable_connected_clients()->Add();
+  // @@protoc_insertion_point(field_add:broker.SystemStats.connected_clients)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>& SystemStats::connected_clients() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:broker.SystemStats.connected_clients)
+  return _internal_connected_clients();
+}
+inline const ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>&
+SystemStats::_internal_connected_clients() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.connected_clients_;
+}
+inline ::google::protobuf::RepeatedPtrField<::broker::ClientInfo>* PROTOBUF_NONNULL
+SystemStats::_internal_mutable_connected_clients() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.connected_clients_;
 }
 
 #ifdef __GNUC__

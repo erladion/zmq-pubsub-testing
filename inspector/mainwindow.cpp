@@ -10,6 +10,14 @@
 
 #include "messagekeys.h"
 
+// Drop this near the top of mainwindow.cpp, below the includes
+static QString formatByteSize(size_t bytes) {
+  if (bytes < 1024) {
+    return QString::number(bytes) + " B";
+  }
+  return QString::number(bytes / 1024.0, 'f', 2) + " KB";
+}
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   // 1. Tell Qt about our custom struct for signals
   qRegisterMetaType<InspectorPacket>("InspectorPacket");
@@ -44,6 +52,17 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
   QTableWidgetItem* keyItem = new QTableWidgetItem(QString::fromStdString(packet.key));
   QTableWidgetItem* topicItem = new QTableWidgetItem(QString::fromStdString(packet.topic));
 
+  size_t totalSize = packet.rawMemory.size();
+
+  // Size of the specific 'google.protobuf.Any' inner payload
+  size_t payloadSize = packet.parsedProto.payload().ByteSizeLong();
+
+  QTableWidgetItem* msgSizeItem = new QTableWidgetItem(formatByteSize(totalSize));
+  QTableWidgetItem* payloadSizeItem = new QTableWidgetItem(formatByteSize(payloadSize));
+
+  msgSizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  payloadSizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
   QColor rowColor;
   if (Keys::isControlMessage(packet.key)) {
     rowColor = QColor(40, 60, 255, 100);
@@ -60,12 +79,16 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
     senderItem->setBackground(brush);
     keyItem->setBackground(brush);
     topicItem->setBackground(brush);
+    msgSizeItem->setBackground(brush);
+    payloadSizeItem->setBackground(brush);
   }
 
   m_packetTable->setItem(row, 0, timeItem);
   m_packetTable->setItem(row, 1, senderItem);
   m_packetTable->setItem(row, 2, keyItem);
   m_packetTable->setItem(row, 3, topicItem);
+  m_packetTable->setItem(row, 4, msgSizeItem);
+  m_packetTable->setItem(row, 5, payloadSizeItem);
 
   QString qTopic = QString::fromStdString(packet.topic);
   if (qTopic.isEmpty())
@@ -144,6 +167,7 @@ void MainWindow::setupUi() {
   m_filterBar = new QLineEdit(this);
   m_filterBar->setPlaceholderText("Filter by Topic, Key, or Sender...");
   m_filterBar->setClearButtonEnabled(true);
+
   connect(m_filterBar, &QLineEdit::textChanged, this, &MainWindow::applyFilters);
 
   // 2. Create the Dropdown Button & Menu
@@ -160,9 +184,20 @@ void MainWindow::setupUi() {
   // 3. Build the rest of your UI (Unchanged)
   QSplitter* mainSplitter = new QSplitter(Qt::Vertical, this);
 
-  m_packetTable = new QTableWidget(0, 4, this);
-  m_packetTable->setHorizontalHeaderLabels({"Time", "Sender", "Key", "Topic"});
-  m_packetTable->horizontalHeader()->setStretchLastSection(true);
+  m_packetTable = new QTableWidget(0, 6, this);
+  m_packetTable->setHorizontalHeaderLabels({"Time", "Sender", "Key", "Topic", "Msg size", "Payload size"});
+
+  QHeaderView* header = m_packetTable->horizontalHeader();
+  header->setSectionResizeMode(0, QHeaderView::ResizeToContents);  // Time
+  header->setSectionResizeMode(2, QHeaderView::ResizeToContents);  // Key
+  header->setSectionResizeMode(3, QHeaderView::ResizeToContents);  // Topic
+  header->setSectionResizeMode(4, QHeaderView::ResizeToContents);  // Msg Size
+  header->setSectionResizeMode(5, QHeaderView::ResizeToContents);  // Payload Size
+
+  header->setSectionResizeMode(1, QHeaderView::Stretch);  // Sender
+  header->setStretchLastSection(false);
+
+  // m_packetTable->horizontalHeader()->setStretchLastSection(true);
   m_packetTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_packetTable->setSelectionMode(QAbstractItemView::SingleSelection);
   connect(m_packetTable, &QTableWidget::itemSelectionChanged, this, &MainWindow::onSelectionChanged);

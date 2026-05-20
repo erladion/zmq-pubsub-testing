@@ -1,13 +1,19 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QAction>
 #include <QDockWidget>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMainWindow>
+#include <QMenu>
+#include <QPushButton>
+#include <QSet>
 #include <QSplitter>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
 #include <vector>
@@ -21,10 +27,10 @@ public:
   ~MainWindow();
 
 private slots:
-  void onNewPacket(const InspectorPacket& packet);
-  void onSelectionChanged();
 
-  // void toggleStatsView(); // TODO: Implement this when ready
+  void applyFilters();  // Replaces onFilterTextChanged
+  void onSelectionChanged();
+  void onNewPacket(const InspectorPacket& packet);
 
 private:
   void setupUi();
@@ -49,6 +55,12 @@ private:
   QLabel* m_msgsSecLabel;
   QLabel* m_kbSecLabel;
   QLabel* m_totalMsgsLabel;
+
+  QLineEdit* m_filterBar;
+
+  QSet<QString> m_knownTopics;
+  QPushButton* m_topicFilterButton;
+  QMenu* m_topicMenu;
 };
 
 #endif

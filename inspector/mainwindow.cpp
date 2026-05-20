@@ -67,10 +67,33 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
   m_packetTable->setItem(row, 2, keyItem);
   m_packetTable->setItem(row, 3, topicItem);
 
+  QString qTopic = QString::fromStdString(packet.topic);
+  if (qTopic.isEmpty())
+    qTopic = "[Empty]";  // Safety net for pure control messages
+
+  // If we've never seen this topic before, add it to the UI!
+  if (!m_knownTopics.contains(qTopic)) {
+    m_knownTopics.insert(qTopic);
+
+    QAction* action = new QAction(qTopic, this);
+    action->setCheckable(true);
+    action->setChecked(true);  // Default to checked (visible)
+
+    m_topicMenu->addAction(action);
+
+    // Re-run filters if the user toggles this new checkbox
+    connect(action, &QAction::toggled, this, &MainWindow::applyFilters);
+  }
+
+  // ==========================================
+  // APPLY FILTERS TO NEW ROW
+  // ==========================================
+  // Force the new row to immediately respect the current filters
+  applyFilters();
+
   if (isAtBottom) {
     m_packetTable->scrollToBottom();
   }
-
   if (packet.topic == Keys::SYS_STATS) {
     broker::SystemStats statsMsg;
 
@@ -111,6 +134,30 @@ void MainWindow::onSelectionChanged() {
 }
 
 void MainWindow::setupUi() {
+  QWidget* centralWidget = new QWidget(this);
+  QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
+  mainLayout->setContentsMargins(4, 4, 4, 4);
+
+  // 1. Create the Top Bar Layout
+  QHBoxLayout* topBarLayout = new QHBoxLayout();
+
+  m_filterBar = new QLineEdit(this);
+  m_filterBar->setPlaceholderText("Filter by Topic, Key, or Sender...");
+  m_filterBar->setClearButtonEnabled(true);
+  connect(m_filterBar, &QLineEdit::textChanged, this, &MainWindow::applyFilters);
+
+  // 2. Create the Dropdown Button & Menu
+  m_topicFilterButton = new QPushButton("Topic Filters", this);
+  m_topicMenu = new QMenu(this);
+  m_topicFilterButton->setMenu(m_topicMenu);  // Attach the menu to the button
+
+  topBarLayout->addWidget(m_filterBar);
+  topBarLayout->addWidget(m_topicFilterButton);
+
+  // 3. Add to main layout
+  mainLayout->addLayout(topBarLayout);
+
+  // 3. Build the rest of your UI (Unchanged)
   QSplitter* mainSplitter = new QSplitter(Qt::Vertical, this);
 
   m_packetTable = new QTableWidget(0, 4, this);
@@ -119,18 +166,24 @@ void MainWindow::setupUi() {
   m_packetTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_packetTable->setSelectionMode(QAbstractItemView::SingleSelection);
   connect(m_packetTable, &QTableWidget::itemSelectionChanged, this, &MainWindow::onSelectionChanged);
+
   m_protoTree = new QTreeWidget(this);
   m_protoTree->setHeaderLabels({"Field", "Value"});
 
   m_hexDump = new QTextEdit(this);
-  m_hexDump->setFontFamily("Courier");  // Monospace for hex
+  m_hexDump->setFontFamily("Courier");
   m_hexDump->setReadOnly(true);
 
   mainSplitter->addWidget(m_packetTable);
   mainSplitter->addWidget(m_protoTree);
   mainSplitter->addWidget(m_hexDump);
 
-  setCentralWidget(mainSplitter);
+  // 4. Stack them in the main layout
+  mainLayout->addWidget(m_filterBar);
+  mainLayout->addWidget(mainSplitter);
+
+  // 5. Set the new master container
+  setCentralWidget(centralWidget);
   resize(1024, 768);
 
   setupSysStatsView();
@@ -192,4 +245,32 @@ void MainWindow::setupSysStatsView() {
 
   // (Optional) If you have a QMenu or QToolBar, you can add the toggle action:
   // ui->menuView->addAction(m_statsDock->toggleViewAction());
+}
+
+void MainWindow::applyFilters() {
+  QString lowerText = m_filterBar->text().toLower();
+
+  // 1. Build a fast lookup set of all CURRENTLY CHECKED topics
+  QSet<QString> allowedTopics;
+  for (QAction* action : m_topicMenu->actions()) {
+    if (action->isChecked()) {
+      allowedTopics.insert(action->text());
+    }
+  }
+
+  // 2. Loop through every row
+  for (int i = 0; i < m_packetTable->rowCount(); ++i) {
+    QString sender = m_packetTable->item(i, 1)->text().toLower();
+    QString key = m_packetTable->item(i, 2)->text().toLower();
+    QString topic = m_packetTable->item(i, 3)->text();  // Keep case for exact match
+
+    // Check Text Match
+    bool textMatch = lowerText.isEmpty() || sender.contains(lowerText) || key.contains(lowerText) || topic.toLower().contains(lowerText);
+
+    // Check Dropdown Match
+    bool topicMatch = allowedTopics.contains(topic);
+
+    // Hide row if it fails EITHER filter
+    m_packetTable->setRowHidden(i, !(textMatch && topicMatch));
+  }
 }

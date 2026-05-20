@@ -32,14 +32,12 @@ void InspectorWorker::run() {
       p.rawMemory = std::string(static_cast<char*>(msg.data()), msg.size());
 
       if (p.parsedProto.ParseFromString(p.rawMemory)) {
-        // Generate your timestamp string here
         p.timestamp = getCurrentTimestamp();
         p.senderId = p.parsedProto.sender_id();
         p.key = p.parsedProto.handler_key();
         p.topic = p.parsedProto.topic();
         p.sizeBytes = msg.size();
 
-        // Fire the signal to the GUI thread
         emit packetReceived(p);
       }
     } else {

@@ -21,7 +21,6 @@ inline void populateProtobufTree(const google::protobuf::Message& msg, QTreeWidg
   for (int i = 0; i < descriptor->field_count(); ++i) {
     const google::protobuf::FieldDescriptor* field = descriptor->field(i);
 
-    // Skip empty optional fields to keep the UI clean
     if (!field->is_repeated() && !reflection->HasField(msg, field)) {
       continue;
     }
@@ -62,7 +61,6 @@ inline void populateProtobufTree(const google::protobuf::Message& msg, QTreeWidg
         std::string valueStr;
         google::protobuf::TextFormat::PrintFieldValueToString(msg, field, -1, &valueStr);
 
-        // Clean up trailing newlines from TextFormat
         if (!valueStr.empty() && valueStr.back() == '\n') {
           valueStr.pop_back();
         }
@@ -72,7 +70,6 @@ inline void populateProtobufTree(const google::protobuf::Message& msg, QTreeWidg
   }
 }
 
-// DYNAMIC UNPACKER (Converts Any -> Real Object)
 inline std::unique_ptr<google::protobuf::Message> dynamicallyUnpack(const broker::BrokerPayload& payload) {
   if (!payload.has_payload()) {
     return nullptr;
@@ -99,7 +96,6 @@ inline std::unique_ptr<google::protobuf::Message> dynamicallyUnpack(const broker
 }
 
 inline void drawEnvelopeAndPayload(const broker::BrokerPayload& envelope, QTreeWidget* treeWidget) {
-  // Draw the Outer Envelope
   QTreeWidgetItem* envelopeRoot = new QTreeWidgetItem(treeWidget);
   envelopeRoot->setText(0, "Broker Envelope");
   populateProtobufTree(envelope, envelopeRoot);
@@ -118,9 +114,7 @@ inline void drawEnvelopeAndPayload(const broker::BrokerPayload& envelope, QTreeW
       errorRoot->setText(0, "[Unknown Protobuf Schema]");
       errorRoot->setText(1, "Link .pb.cc file to view");
     }
-  }
-  // Draw the Inner Payload (If it's raw C++ struct bytes / string)
-  else if (!envelope.raw_data().empty()) {
+  } else if (!envelope.raw_data().empty()) {  // Draw the Inner Payload (If it's raw C++ struct bytes / string)
     QTreeWidgetItem* rawRoot = new QTreeWidgetItem(treeWidget);
     rawRoot->setText(0, "Raw Payload");
     rawRoot->setText(1, QString("[%1 bytes]").arg(envelope.raw_data().size()));

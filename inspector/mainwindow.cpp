@@ -10,7 +10,6 @@
 
 #include "messagekeys.h"
 
-// Drop this near the top of mainwindow.cpp, below the includes
 static QString formatByteSize(size_t bytes) {
   if (bytes < 1024) {
     return QString::number(bytes) + " B";
@@ -19,15 +18,11 @@ static QString formatByteSize(size_t bytes) {
 }
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-  // 1. Tell Qt about our custom struct for signals
   qRegisterMetaType<InspectorPacket>("InspectorPacket");
 
   setupUi();
 
-  // 2. Spin up the ZeroMQ background thread
   m_worker = new InspectorWorker(this);
-
-  // 3. Connect the threads safely
   connect(m_worker, &InspectorWorker::packetReceived, this, &MainWindow::onNewPacket, Qt::QueuedConnection);
 
   m_worker->start();
@@ -91,27 +86,22 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
   m_packetTable->setItem(row, 5, payloadSizeItem);
 
   QString qTopic = QString::fromStdString(packet.topic);
-  if (qTopic.isEmpty())
-    qTopic = "[Empty]";  // Safety net for pure control messages
+  if (qTopic.isEmpty()) {
+    qTopic = "[Empty]";
+  }
 
-  // If we've never seen this topic before, add it to the UI!
   if (!m_knownTopics.contains(qTopic)) {
     m_knownTopics.insert(qTopic);
 
     QAction* action = new QAction(qTopic, this);
     action->setCheckable(true);
-    action->setChecked(true);  // Default to checked (visible)
+    action->setChecked(true);
 
     m_topicMenu->addAction(action);
 
-    // Re-run filters if the user toggles this new checkbox
     connect(action, &QAction::toggled, this, &MainWindow::applyFilters);
   }
 
-  // ==========================================
-  // APPLY FILTERS TO NEW ROW
-  // ==========================================
-  // Force the new row to immediately respect the current filters
   applyFilters();
 
   if (isAtBottom) {
@@ -121,7 +111,6 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
     broker::SystemStats statsMsg;
 
     if (packet.parsedProto.payload().UnpackTo(&statsMsg)) {
-      // Update all labels
       m_brokerIdLabel->setText(QString("Broker ID: %1").arg(QString::fromStdString(statsMsg.broker_id())));
       m_uptimeLabel->setText(QString("Uptime: %1 s").arg(statsMsg.uptime_sec()));
 
@@ -129,7 +118,7 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
       m_peersLabel->setText(QString("Peers: %1").arg(statsMsg.peers_count()));
 
       m_msgsSecLabel->setText(QString("Msgs/sec: %1").arg(statsMsg.msgs_per_sec()));
-      m_kbSecLabel->setText(QString("KB/sec: %1").arg(statsMsg.kb_per_sec(), 0, 'f', 2));  // 2 decimal places
+      m_kbSecLabel->setText(QString("KB/sec: %1").arg(statsMsg.kb_per_sec(), 0, 'f', 2));
       m_totalMsgsLabel->setText(QString("Total Msgs: %1").arg(statsMsg.total_msgs()));
     }
   }
@@ -161,7 +150,6 @@ void MainWindow::setupUi() {
   QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
   mainLayout->setContentsMargins(4, 4, 4, 4);
 
-  // 1. Create the Top Bar Layout
   QHBoxLayout* topBarLayout = new QHBoxLayout();
 
   m_filterBar = new QLineEdit(this);
@@ -170,18 +158,13 @@ void MainWindow::setupUi() {
 
   connect(m_filterBar, &QLineEdit::textChanged, this, &MainWindow::applyFilters);
 
-  // 2. Create the Dropdown Button & Menu
   m_topicFilterButton = new QPushButton("Topic Filters", this);
   m_topicMenu = new QMenu(this);
-  m_topicFilterButton->setMenu(m_topicMenu);  // Attach the menu to the button
+  m_topicFilterButton->setMenu(m_topicMenu);
 
   topBarLayout->addWidget(m_filterBar);
   topBarLayout->addWidget(m_topicFilterButton);
 
-  // 3. Add to main layout
-  mainLayout->addLayout(topBarLayout);
-
-  // 3. Build the rest of your UI (Unchanged)
   QSplitter* mainSplitter = new QSplitter(Qt::Vertical, this);
 
   m_packetTable = new QTableWidget(0, 6, this);
@@ -189,15 +172,13 @@ void MainWindow::setupUi() {
 
   QHeaderView* header = m_packetTable->horizontalHeader();
   header->setSectionResizeMode(0, QHeaderView::ResizeToContents);  // Time
+  header->setSectionResizeMode(1, QHeaderView::Stretch);           // Sender
   header->setSectionResizeMode(2, QHeaderView::ResizeToContents);  // Key
   header->setSectionResizeMode(3, QHeaderView::ResizeToContents);  // Topic
   header->setSectionResizeMode(4, QHeaderView::ResizeToContents);  // Msg Size
   header->setSectionResizeMode(5, QHeaderView::ResizeToContents);  // Payload Size
-
-  header->setSectionResizeMode(1, QHeaderView::Stretch);  // Sender
   header->setStretchLastSection(false);
 
-  // m_packetTable->horizontalHeader()->setStretchLastSection(true);
   m_packetTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_packetTable->setSelectionMode(QAbstractItemView::SingleSelection);
   connect(m_packetTable, &QTableWidget::itemSelectionChanged, this, &MainWindow::onSelectionChanged);
@@ -213,11 +194,9 @@ void MainWindow::setupUi() {
   mainSplitter->addWidget(m_protoTree);
   mainSplitter->addWidget(m_hexDump);
 
-  // 4. Stack them in the main layout
-  mainLayout->addWidget(m_filterBar);
+  mainLayout->addLayout(topBarLayout);
   mainLayout->addWidget(mainSplitter);
 
-  // 5. Set the new master container
   setCentralWidget(centralWidget);
   resize(1024, 768);
 
@@ -225,17 +204,13 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::setupSysStatsView() {
-  // 1. Create the Docking Window
   m_statsDock = new QDockWidget("Live System Stats", this);
 
-  // Lock it to the left or right sides so it doesn't mess up your top/bottom layout
   m_statsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
-  // 2. Create the container widget and layout
   QWidget* dockContent = new QWidget();
   QVBoxLayout* layout = new QVBoxLayout(dockContent);
 
-  // 3. Initialize the labels
   m_brokerIdLabel = new QLabel("Broker ID: --");
   m_brokerIdLabel->setWordWrap(true);
   m_brokerIdLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -246,13 +221,11 @@ void MainWindow::setupSysStatsView() {
   m_kbSecLabel = new QLabel("KB/sec: 0.00");
   m_totalMsgsLabel = new QLabel("Total Msgs: 0");
 
-  // Optional: Style the high-priority metrics so they stand out
   QFont boldFont("Courier", 10, QFont::Bold);
   m_brokerIdLabel->setFont(boldFont);
 
   m_msgsSecLabel->setStyleSheet("color: #2ecc71; font-weight: bold;");  // Green
 
-  // 4. Add them to the layout with some spacing lines
   layout->addWidget(m_brokerIdLabel);
   layout->addWidget(m_uptimeLabel);
 
@@ -271,21 +244,15 @@ void MainWindow::setupSysStatsView() {
   layout->addWidget(m_kbSecLabel);
   layout->addWidget(m_totalMsgsLabel);
 
-  // Push everything to the top
   layout->addStretch();
 
-  // 5. Attach to Dock and add to Main Window
   m_statsDock->setWidget(dockContent);
   addDockWidget(Qt::RightDockWidgetArea, m_statsDock);
-
-  // (Optional) If you have a QMenu or QToolBar, you can add the toggle action:
-  // ui->menuView->addAction(m_statsDock->toggleViewAction());
 }
 
 void MainWindow::applyFilters() {
-  QString lowerText = m_filterBar->text().toLower();
+  const QString lowerText = m_filterBar->text().toLower();
 
-  // 1. Build a fast lookup set of all CURRENTLY CHECKED topics
   QSet<QString> allowedTopics;
   for (QAction* action : m_topicMenu->actions()) {
     if (action->isChecked()) {
@@ -293,19 +260,14 @@ void MainWindow::applyFilters() {
     }
   }
 
-  // 2. Loop through every row
   for (int i = 0; i < m_packetTable->rowCount(); ++i) {
-    QString sender = m_packetTable->item(i, 1)->text().toLower();
-    QString key = m_packetTable->item(i, 2)->text().toLower();
-    QString topic = m_packetTable->item(i, 3)->text();  // Keep case for exact match
+    const QString sender = m_packetTable->item(i, 1)->text().toLower();
+    const QString key = m_packetTable->item(i, 2)->text().toLower();
+    const QString topic = m_packetTable->item(i, 3)->text();  // Keep case for exact match
 
-    // Check Text Match
-    bool textMatch = lowerText.isEmpty() || sender.contains(lowerText) || key.contains(lowerText) || topic.toLower().contains(lowerText);
+    const bool textMatch = lowerText.isEmpty() || sender.contains(lowerText) || key.contains(lowerText) || topic.toLower().contains(lowerText);
+    const bool topicMatch = allowedTopics.contains(topic);
 
-    // Check Dropdown Match
-    bool topicMatch = allowedTopics.contains(topic);
-
-    // Hide row if it fails EITHER filter
     m_packetTable->setRowHidden(i, !(textMatch && topicMatch));
   }
 }

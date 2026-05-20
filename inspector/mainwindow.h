@@ -27,8 +27,7 @@ public:
   ~MainWindow();
 
 private slots:
-
-  void applyFilters();  // Replaces onFilterTextChanged
+  void applyFilters();
   void onSelectionChanged();
   void onNewPacket(const InspectorPacket& packet);
 
@@ -40,14 +39,12 @@ private:
   InspectorWorker* m_worker;
   std::vector<InspectorPacket> m_packetHistory;
 
-  // The Wireshark Trinity
-  QTableWidget* m_packetTable;  // Top Pane
-  QTreeWidget* m_protoTree;     // Middle Pane
-  QTextEdit* m_hexDump;         // Bottom Pane
+  QTableWidget* m_packetTable;
+  QTreeWidget* m_protoTree;
+  QTextEdit* m_hexDump;
 
   QDockWidget* m_statsDock;
 
-  // Labels for the exact data your broker sends
   QLabel* m_brokerIdLabel;
   QLabel* m_uptimeLabel;
   QLabel* m_clientsLabel;

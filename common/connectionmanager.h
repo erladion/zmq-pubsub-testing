@@ -81,8 +81,9 @@ public:
   }
 
   template <typename T>
-  static typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_pointer<T>::value && !std::is_array<T>::value &&
-                                     !std::is_base_of<google::protobuf::Message, T>::value && !DataSerializer<T>::is_specialized,
+  static typename std::enable_if<std::is_trivially_copyable<T>::value && std::is_standard_layout<T>::value && !std::is_pointer<T>::value &&
+                                     !std::is_array<T>::value && !std::is_base_of<google::protobuf::Message, T>::value &&
+                                     !DataSerializer<T>::is_specialized,
                                  bool>::type
   sendMessage(const std::string& key, const T& value) {
     return instance().sendDataRaw(key, reinterpret_cast<const char*>(&value), static_cast<int>(sizeof(T)));
@@ -91,6 +92,7 @@ public:
   template <typename Callable>
   static typename std::enable_if<
       std::is_trivially_copyable<typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::value &&
+          std::is_standard_layout<Callable>::value &&
           !std::is_base_of<google::protobuf::Message, typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::value &&
           !DataSerializer<typename std::decay<typename CallableTraits<Callable>::ArgType>::type>::is_specialized &&
           !std::is_same<typename std::decay<typename CallableTraits<Callable>::ArgType>::type, std::string>::value,

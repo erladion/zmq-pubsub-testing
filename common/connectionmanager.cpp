@@ -1,5 +1,6 @@
 #include "connectionmanager.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <future>
 #include <random>

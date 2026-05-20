@@ -5,6 +5,7 @@
 #include "messagekeys.h"
 #include "uuidhelper.h"
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 

@@ -38,14 +38,14 @@ void ZmqBroker::start(const std::vector<std::string>& bindAddresses) {
 void ZmqBroker::stop() {
   m_running = false;
 
+  if (m_brokerThread.joinable()) {
+    m_brokerThread.join();
+  }
+
   for (auto& peer : m_peers) {
     peer->stop();
   }
   m_peers.clear();
-
-  if (m_brokerThread.joinable()) {
-    m_brokerThread.join();
-  }
 }
 
 void ZmqBroker::run(const std::vector<std::string>& addresses) {
@@ -121,8 +121,9 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
         auto elapsed = now - it->second.lastSeen;
 
         if (elapsed > CLIENT_TIMEOUT) {
+          auto nextIt = std::next(it);
           removeClient(it->first, "Timeout / Zombie");
-          it = m_clients.begin();  // Reset iterator safely after erasing
+          it = nextIt;  // Reset iterator safely after erasing
         } else {
           ++it;
         }

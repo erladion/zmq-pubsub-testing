@@ -5,7 +5,7 @@
 
 #include <thread>
 #include <unordered_map>
-#include <set>
+#include <unordered_set>
 #include <mutex>
 #include <atomic>
 #include <deque>
@@ -62,7 +62,7 @@ private:
   SafeQueue<broker::BrokerPayload> m_peerInboundQueue;
 
   std::mutex m_historyMutex;
-  std::set<std::string> m_seenMessageIds;
+  std::unordered_set<std::string> m_seenMessageIds;
   std::deque<std::string> m_messageIdOrder;
 
   // Stats

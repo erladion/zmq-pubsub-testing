@@ -15,7 +15,14 @@
 static zmq::message_t createZeroCopyMsg(const google::protobuf::Message& protoMsg) {
   size_t size = protoMsg.ByteSizeLong();
 
+  if (size == 0) {
+    return zmq::message_t();
+  }
+
   void* buffer = malloc(size);
+  if (!buffer) {
+    throw std::bad_alloc();
+  }
 
   protoMsg.SerializeToArray(buffer, size);
 

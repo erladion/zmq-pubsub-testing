@@ -79,6 +79,10 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
     if (items[0].revents & ZMQ_POLLIN) {
       zmq::message_t identity;
       if (socket.recv(identity, zmq::recv_flags::none)) {
+        if (!socket.get(zmq::sockopt::rcvmore)) {
+          Logger::Log(Logger::WARNING, "Received single-part message on ROUTER socket. Dropping.");
+          continue;
+        }
         zmq::message_t payload;
         if (socket.recv(payload, zmq::recv_flags::none)) {
           // Flush garbage (Multipart safety)

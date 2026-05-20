@@ -8,6 +8,20 @@
 #include <iostream>
 #include <sstream>
 
+#include <google/protobuf/arena.h>
+#include <google/protobuf/stubs/common.h>
+
+static zmq::message_t createZeroCopyMsg(const google::protobuf::Message& protoMsg) {
+  size_t size = protoMsg.ByteSizeLong();
+
+  void* buffer = malloc(size);
+
+  protoMsg.SerializeToArray(buffer, size);
+
+  return zmq::message_t(
+      buffer, size, [](void* data, void* /*hint*/) { free(data); }, nullptr);
+}
+
 ZmqBroker::ZmqBroker() : m_running(false), m_context(1), m_brokerId(generateUUID()) {}
 
 ZmqBroker::~ZmqBroker() {
@@ -56,6 +70,8 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
   auto lastCleanup = std::chrono::steady_clock::now();
 
   while (m_running) {
+    google::protobuf::Arena arena;
+
     // Poll for local clients
     zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
     zmq::poll(items, 1, std::chrono::milliseconds(20));
@@ -77,9 +93,13 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           m_totalBytes += payload.size();
           m_bytesInterval += payload.size();
 
-          broker::BrokerPayload msg;
-          if (msg.ParseFromArray(payload.data(), payload.size())) {
-            processMessage(socket, inspectorSocket, msg, identity.to_string(), false);
+#if GOOGLE_PROTOBUF_VERSION >= 4023000
+          broker::BrokerPayload* msg = google::protobuf::Arena::Create<broker::BrokerPayload>(&arena);
+#else
+          broker::BrokerPayload* msg = google::protobuf::Arena::CreateMessage<broker::BrokerPayload>(&arena);
+#endif
+          if (msg->ParseFromArray(payload.data(), payload.size())) {
+            processMessage(socket, inspectorSocket, *msg, identity.to_string(), false);
           }
         }
       }
@@ -154,8 +174,8 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
       broker::BrokerPayload resetMsg;
       resetMsg.set_handler_key(Keys::RESET.data(), Keys::RESET.size());
       resetMsg.set_topic("");
-      std::string resetData = resetMsg.SerializeAsString();
 
+      std::string resetData = resetMsg.SerializeAsString();
       zmq::message_t outData(resetData.begin(), resetData.end());
 
       try {
@@ -206,7 +226,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
         auto& subs = m_topicSubscribers[msg.topic()];
         auto it = std::find(subs.begin(), subs.end(), senderId);
         if (it != subs.end()) {
-          *it = subs.back();  // Fast O(1) removal swap
+          *it = subs.back();
           subs.pop_back();
         }
 
@@ -236,14 +256,12 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     return;  // Drop it, we've seen it.
   }
 
-  std::string data = msg.SerializeAsString();
-
   // Local subscribers
   {
     std::lock_guard<std::mutex> lock(m_stateMutex);
 
     if (m_topicSubscribers.count(msg.topic())) {
-      zmq::message_t outData(data.begin(), data.end());
+      zmq::message_t outData = createZeroCopyMsg(msg);
       for (const auto& id : m_topicSubscribers[msg.topic()]) {
         // Don't echo back to sender if it's a local client
         if (!isFromPeer && id == senderId) {
@@ -257,9 +275,12 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
 
         zmq::message_t outId(id.data(), id.size());
 
+        zmq::message_t msgCopy;
+        msgCopy.copy(outData);
+
         try {
           socket.send(outId, zmq::send_flags::sndmore);
-          socket.send(outData, zmq::send_flags::none);
+          socket.send(msgCopy, zmq::send_flags::none);
         } catch (const zmq::error_t& e) {
           // Client likely disconnected, will be picked up by Zombie killer
         }
@@ -326,7 +347,7 @@ void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSo
   inspectorSocket.send(inspectorMsg, zmq::send_flags::dontwait);
 
   if (m_topicSubscribers.count(sysStatsKey)) {
-    zmq::message_t outData(data.begin(), data.end());
+    zmq::message_t outData = createZeroCopyMsg(envelope);
 
     for (const auto& id : m_topicSubscribers[sysStatsKey]) {
       zmq::message_t outId(id.data(), id.size());

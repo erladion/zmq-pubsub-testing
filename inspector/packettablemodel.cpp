@@ -1,0 +1,93 @@
+#include "packettablemodel.h"
+
+#include <QColor>
+
+#include "messagekeys.h"
+
+static QString formatByteSize(size_t bytes) {
+  if (bytes < 1024) {
+    return QString::number(bytes) + " B";
+  }
+  return QString::number(bytes / 1024.0, 'f', 2) + " KB";
+}
+
+PacketTableModel::PacketTableModel(const std::vector<InspectorPacket>& history, QObject* parent) : QAbstractTableModel(parent), m_history(history) {}
+
+int PacketTableModel::rowCount(const QModelIndex&) const {
+  return m_history.size();
+}
+int PacketTableModel::columnCount(const QModelIndex&) const {
+  return 6;
+}
+
+void PacketTableModel::packetAdded() {
+  beginInsertRows(QModelIndex(), m_history.size() - 1, m_history.size() - 1);
+  endInsertRows();
+}
+
+QVariant PacketTableModel::headerData(int section, Qt::Orientation orientation, int role) const {
+  if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
+    return QVariant();
+  const char* headers[] = {"Time", "Sender", "Key", "Topic", "Msg size", "Payload size"};
+  return headers[section];
+}
+
+QVariant PacketTableModel::data(const QModelIndex& index, int role) const {
+  if (!index.isValid() || index.row() >= m_history.size())
+    return QVariant();
+
+  const InspectorPacket& packet = m_history[index.row()];
+
+  if (role == Qt::DisplayRole) {
+    switch (index.column()) {
+      case 0:
+        return QString::fromStdString(packet.timestamp);
+      case 1:
+        return QString::fromStdString(packet.senderId);
+      case 2:
+        return QString::fromStdString(packet.key);
+      case 3:
+        return QString::fromStdString(packet.topic);
+      case 4:
+        return formatByteSize(packet.rawMemory.size());
+      case 5: {
+        size_t payloadSize = packet.parsedProto.has_payload() ? packet.parsedProto.payload().ByteSizeLong() : packet.parsedProto.raw_data().size();
+        return formatByteSize(payloadSize);
+      }
+    }
+  } else if (role == Qt::TextAlignmentRole && (index.column() == 4 || index.column() == 5)) {
+    return int(Qt::AlignRight | Qt::AlignVCenter);
+  } else if (role == Qt::BackgroundRole) {
+    if (Keys::isControlMessage(packet.key))
+      return QColor(40, 60, 255, 100);
+    if (packet.key == Keys::SYS_STATS)
+      return QColor(128, 128, 0, 100);
+  }
+  return QVariant();
+}
+
+PacketFilterProxyModel::PacketFilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {}
+
+void PacketFilterProxyModel::updateFilters(const QString& text, const QSet<QString>& topics) {
+  searchText = text.toLower();
+  allowedTopics = topics;
+  invalidateFilter();
+}
+
+bool PacketFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
+  QModelIndex topicIdx = sourceModel()->index(sourceRow, 3, sourceParent);
+  QString topic = sourceModel()->data(topicIdx).toString();
+
+  if (!allowedTopics.contains(topic)) {
+    return false;
+  }
+
+  if (searchText.isEmpty()) {
+    return true;
+  }
+
+  QString sender = sourceModel()->data(sourceModel()->index(sourceRow, 1, sourceParent)).toString().toLower();
+  QString key = sourceModel()->data(sourceModel()->index(sourceRow, 2, sourceParent)).toString().toLower();
+
+  return sender.contains(searchText) || key.contains(searchText) || topic.toLower().contains(searchText);
+}

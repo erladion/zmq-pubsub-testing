@@ -17,8 +17,11 @@
 #include <QVBoxLayout>
 
 #include <vector>
+
 #include "inspectorworker.h"
 #include "zmqworker.h"
+
+#include "packettablemodel.h"
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -45,7 +48,10 @@ private:
 
   std::vector<InspectorPacket> m_packetHistory;
 
-  QTableWidget* m_packetTable;
+  QTableView* m_packetView;
+  PacketTableModel* m_tableModel;
+  PacketFilterProxyModel* m_proxyModel;
+
   QTreeWidget* m_protoTree;
   QTextEdit* m_hexDump;
 

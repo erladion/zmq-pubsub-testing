@@ -9,6 +9,7 @@ add_executable(inspector
   mainwindow.cpp
   protoutils.h
   hexutils.h
+  packettablemodel.h packettablemodel.cpp
 )
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Gui)

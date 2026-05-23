@@ -15,13 +15,6 @@
 
 #include "logger.h"
 
-static QString formatByteSize(size_t bytes) {
-  if (bytes < 1024) {
-    return QString::number(bytes) + " B";
-  }
-  return QString::number(bytes / 1024.0, 'f', 2) + " KB";
-}
-
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   qRegisterMetaType<InspectorPacket>("InspectorPacket");
 
@@ -49,56 +42,11 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::onNewPacket(const InspectorPacket& packet) {
-  m_packetHistory.push_back(packet);
-
-  QScrollBar* scrollBar = m_packetTable->verticalScrollBar();
+  QScrollBar* scrollBar = m_packetView->verticalScrollBar();
   bool isAtBottom = (scrollBar->value() == scrollBar->maximum());
 
-  int row = m_packetTable->rowCount();
-  m_packetTable->insertRow(row);
-
-  QTableWidgetItem* timeItem = new QTableWidgetItem(QString::fromStdString(packet.timestamp));
-  QTableWidgetItem* senderItem = new QTableWidgetItem(QString::fromStdString(packet.senderId));
-  QTableWidgetItem* keyItem = new QTableWidgetItem(QString::fromStdString(packet.key));
-  QTableWidgetItem* topicItem = new QTableWidgetItem(QString::fromStdString(packet.topic));
-
-  size_t totalSize = packet.rawMemory.size();
-
-  // Size of the specific 'google.protobuf.Any' inner payload
-  size_t payloadSize = packet.parsedProto.payload().ByteSizeLong();
-
-  QTableWidgetItem* msgSizeItem = new QTableWidgetItem(formatByteSize(totalSize));
-  QTableWidgetItem* payloadSizeItem = new QTableWidgetItem(formatByteSize(payloadSize));
-
-  msgSizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-  payloadSizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-
-  QColor rowColor;
-  if (Keys::isControlMessage(packet.key)) {
-    rowColor = QColor(40, 60, 255, 100);
-  } else if (packet.key == Keys::SYS_STATS) {
-    rowColor = QColor(128, 128, 0, 100);
-  } else {
-    // Normal data messages get the default color (or explicitly set one)
-    // rowColor = QColor(50, 50, 50); // Optional: explicitly set normal row color
-  }
-
-  if (rowColor.isValid()) {
-    QBrush brush(rowColor);
-    timeItem->setBackground(brush);
-    senderItem->setBackground(brush);
-    keyItem->setBackground(brush);
-    topicItem->setBackground(brush);
-    msgSizeItem->setBackground(brush);
-    payloadSizeItem->setBackground(brush);
-  }
-
-  m_packetTable->setItem(row, 0, timeItem);
-  m_packetTable->setItem(row, 1, senderItem);
-  m_packetTable->setItem(row, 2, keyItem);
-  m_packetTable->setItem(row, 3, topicItem);
-  m_packetTable->setItem(row, 4, msgSizeItem);
-  m_packetTable->setItem(row, 5, payloadSizeItem);
+  m_packetHistory.push_back(packet);
+  m_tableModel->packetAdded();
 
   QString qTopic = QString::fromStdString(packet.topic);
   if (qTopic.isEmpty()) {
@@ -107,21 +55,18 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
 
   if (!m_knownTopics.contains(qTopic)) {
     m_knownTopics.insert(qTopic);
-
     QAction* action = new QAction(qTopic, this);
     action->setCheckable(true);
     action->setChecked(true);
-
     m_topicMenu->addAction(action);
-
     connect(action, &QAction::toggled, this, &MainWindow::applyFilters);
+    applyFilters();  // Update if a new topic appears
   }
-
-  applyFilters();
 
   if (isAtBottom) {
-    m_packetTable->scrollToBottom();
+    m_packetView->scrollToBottom();
   }
+
   if (packet.topic == Keys::SYS_STATS) {
     broker::SystemStats statsMsg;
 
@@ -140,22 +85,15 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
 }
 
 void MainWindow::onSelectionChanged() {
-  QList<QTableWidgetItem*> selectedItems = m_packetTable->selectedItems();
-
-  if (selectedItems.isEmpty()) {
+  QModelIndexList selected = m_packetView->selectionModel()->selectedRows();
+  if (selected.isEmpty()) {
     return;
   }
 
-  int row = selectedItems.first()->row();
-
-  if (row >= m_packetHistory.size()) {
-    return;
-  }
+  int row = m_proxyModel->mapToSource(selected.first()).row();
 
   const InspectorPacket& packet = m_packetHistory[row];
-
   m_hexDump->setPlainText(QString::fromStdString(HexUtils::generateHexDump(packet.rawMemory)));
-
   m_protoTree->clear();
   ProtoUtils::drawEnvelopeAndPayload(packet.parsedProto, m_protoTree);
 }
@@ -182,10 +120,14 @@ void MainWindow::setupUi() {
 
   QSplitter* mainSplitter = new QSplitter(Qt::Vertical, this);
 
-  m_packetTable = new QTableWidget(0, 6, this);
-  m_packetTable->setHorizontalHeaderLabels({"Time", "Sender", "Key", "Topic", "Msg size", "Payload size"});
+  m_packetView = new QTableView(this);
+  m_tableModel = new PacketTableModel(m_packetHistory, this);
+  m_proxyModel = new PacketFilterProxyModel(this);
 
-  QHeaderView* header = m_packetTable->horizontalHeader();
+  m_proxyModel->setSourceModel(m_tableModel);
+  m_packetView->setModel(m_proxyModel);
+
+  QHeaderView* header = m_packetView->horizontalHeader();
   header->setSectionResizeMode(0, QHeaderView::ResizeToContents);  // Time
   header->setSectionResizeMode(1, QHeaderView::Stretch);           // Sender
   header->setSectionResizeMode(2, QHeaderView::ResizeToContents);  // Key
@@ -194,12 +136,12 @@ void MainWindow::setupUi() {
   header->setSectionResizeMode(5, QHeaderView::ResizeToContents);  // Payload Size
   header->setStretchLastSection(false);
 
-  m_packetTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_packetTable->setSelectionMode(QAbstractItemView::SingleSelection);
-  connect(m_packetTable, &QTableWidget::itemSelectionChanged, this, &MainWindow::onSelectionChanged);
+  m_packetView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_packetView->setSelectionMode(QAbstractItemView::SingleSelection);
+  connect(m_packetView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MainWindow::onSelectionChanged);
 
-  m_packetTable->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(m_packetTable, &QTableWidget::customContextMenuRequested, this, &MainWindow::showContextMenu);
+  m_packetView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_packetView, &QTableView::customContextMenuRequested, this, &MainWindow::showContextMenu);
 
   m_protoTree = new QTreeWidget(this);
   m_protoTree->setHeaderLabels({"Field", "Value"});
@@ -208,7 +150,7 @@ void MainWindow::setupUi() {
   m_hexDump->setFontFamily("Courier");
   m_hexDump->setReadOnly(true);
 
-  mainSplitter->addWidget(m_packetTable);
+  mainSplitter->addWidget(m_packetView);
   mainSplitter->addWidget(m_protoTree);
   mainSplitter->addWidget(m_hexDump);
 
@@ -269,30 +211,18 @@ void MainWindow::setupSysStatsView() {
 }
 
 void MainWindow::applyFilters() {
-  const QString lowerText = m_filterBar->text().toLower();
-
   QSet<QString> allowedTopics;
   for (QAction* action : m_topicMenu->actions()) {
-    if (action->isChecked()) {
+    if (action->isChecked())
       allowedTopics.insert(action->text());
-    }
   }
 
-  for (int i = 0; i < m_packetTable->rowCount(); ++i) {
-    const QString sender = m_packetTable->item(i, 1)->text().toLower();
-    const QString key = m_packetTable->item(i, 2)->text().toLower();
-    const QString topic = m_packetTable->item(i, 3)->text();  // Keep case for exact match
-
-    const bool textMatch = lowerText.isEmpty() || sender.contains(lowerText) || key.contains(lowerText) || topic.toLower().contains(lowerText);
-    const bool topicMatch = allowedTopics.contains(topic);
-
-    m_packetTable->setRowHidden(i, !(textMatch && topicMatch));
-  }
+  m_proxyModel->updateFilters(m_filterBar->text(), allowedTopics);
 }
 
 void MainWindow::showContextMenu(const QPoint& pos) {
-  QList<QTableWidgetItem*> selectedItems = m_packetTable->selectedItems();
-  if (selectedItems.isEmpty()) {
+  QModelIndexList selectedRows = m_packetView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty()) {
     return;
   }
 
@@ -300,17 +230,19 @@ void MainWindow::showContextMenu(const QPoint& pos) {
   QAction* replayAction = menu.addAction("Replay Message");
 
   connect(replayAction, &QAction::triggered, this, &MainWindow::replaySelectedMessage);
-  menu.exec(m_packetTable->viewport()->mapToGlobal(pos));
+
+  menu.exec(m_packetView->viewport()->mapToGlobal(pos));
 }
 
 void MainWindow::replaySelectedMessage() {
-  QList<QTableWidgetItem*> selectedItems = m_packetTable->selectedItems();
-  if (selectedItems.isEmpty()) {
+  QModelIndexList selectedRows = m_packetView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty()) {
     return;
   }
 
-  int row = selectedItems.first()->row();
-  if (row >= m_packetHistory.size()) {
+  int row = m_proxyModel->mapToSource(selectedRows.first()).row();
+
+  if (row >= m_packetHistory.size() || row < 0) {
     return;
   }
 

@@ -89,7 +89,7 @@ void PacketFilterProxyModel::updateFilters(const QString& text, const QSet<QStri
 
 bool PacketFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
   QModelIndex topicIdx = sourceModel()->index(sourceRow, 3, sourceParent);
-  QString topic = sourceModel()->data(topicIdx).toString();
+  const QString topic = sourceModel()->data(topicIdx).toString();
 
   if (!allowedTopics.contains(topic)) {
     return false;
@@ -99,8 +99,8 @@ bool PacketFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& 
     return true;
   }
 
-  QString sender = sourceModel()->data(sourceModel()->index(sourceRow, 1, sourceParent)).toString().toLower();
-  QString key = sourceModel()->data(sourceModel()->index(sourceRow, 2, sourceParent)).toString().toLower();
+  const QString sender = sourceModel()->data(sourceModel()->index(sourceRow, 1, sourceParent)).toString().toLower();
+  const QString key = sourceModel()->data(sourceModel()->index(sourceRow, 2, sourceParent)).toString().toLower();
 
   return sender.contains(searchText) || key.contains(searchText) || topic.toLower().contains(searchText);
 }

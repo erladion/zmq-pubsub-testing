@@ -3,6 +3,7 @@
 #include "config.h"
 #include "logger.h"
 #include "messagekeys.h"
+#include "protoutils.h"
 #include "uuidhelper.h"
 
 #include <algorithm>
@@ -11,24 +12,6 @@
 
 #include <google/protobuf/arena.h>
 #include <google/protobuf/stubs/common.h>
-
-static zmq::message_t createZeroCopyMsg(const google::protobuf::Message& protoMsg) {
-  size_t size = protoMsg.ByteSizeLong();
-
-  if (size == 0) {
-    return zmq::message_t();
-  }
-
-  void* buffer = malloc(size);
-  if (!buffer) {
-    throw std::bad_alloc();
-  }
-
-  protoMsg.SerializeToArray(buffer, size);
-
-  return zmq::message_t(
-      buffer, size, [](void* data, void* /*hint*/) { free(data); }, nullptr);
-}
 
 ZmqBroker::ZmqBroker() : m_running(false), m_context(1), m_brokerId(generateUUID()) {}
 
@@ -158,8 +141,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
                                broker::BrokerPayload& msg,
                                const std::string& senderId,
                                bool isFromPeer) {
-  std::string inspectData = msg.SerializeAsString();
-  zmq::message_t inspectorMsg(inspectData.begin(), inspectData.end());
+  zmq::message_t inspectorMsg = createZmqMsg(msg);
   inspectorSocket.send(inspectorMsg, zmq::send_flags::dontwait);
 
   std::string key = msg.handler_key();
@@ -188,9 +170,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
       resetMsg.set_handler_key(Keys::RESET.data(), Keys::RESET.size());
       resetMsg.set_topic("");
 
-      std::string resetData = resetMsg.SerializeAsString();
-      zmq::message_t outData(resetData.begin(), resetData.end());
-
+      zmq::message_t outData = createZmqMsg(resetMsg);
       try {
         socket.send(outId, zmq::send_flags::sndmore);
         socket.send(outData, zmq::send_flags::none);
@@ -208,9 +188,8 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
         broker::BrokerPayload ack;
         ack.set_handler_key(Keys::HEARTBEAT_ACK);
         ack.set_topic("");
-        std::string ackData = ack.SerializeAsString();
 
-        zmq::message_t outData(ackData.begin(), ackData.end());
+        zmq::message_t outData = createZmqMsg(ack);
         try {
           socket.send(outId, zmq::send_flags::sndmore);
           socket.send(outData, zmq::send_flags::none);
@@ -274,7 +253,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     std::lock_guard<std::mutex> lock(m_stateMutex);
 
     if (m_topicSubscribers.count(msg.topic())) {
-      zmq::message_t outData = createZeroCopyMsg(msg);
+      zmq::message_t outData = createZmqMsg(msg);
       for (const auto& id : m_topicSubscribers[msg.topic()]) {
         // Don't echo back to sender if it's a local client
         if (!isFromPeer && id == senderId) {
@@ -353,19 +332,16 @@ void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSo
   envelope.set_sender_id("BROKER_SYSTEM");
   envelope.mutable_payload()->PackFrom(stats);  // Use Any to pack the struct natively
 
-  std::string data = envelope.SerializeAsString();
   const std::string sysStatsKey(Keys::SYS_STATS);
 
-  zmq::message_t inspectorMsg(data.begin(), data.end());
-  inspectorSocket.send(inspectorMsg, zmq::send_flags::dontwait);
+  zmq::message_t msg = createZmqMsg(envelope);
+  inspectorSocket.send(msg, zmq::send_flags::dontwait);
 
   if (m_topicSubscribers.count(sysStatsKey)) {
-    zmq::message_t outData = createZeroCopyMsg(envelope);
-
     for (const auto& id : m_topicSubscribers[sysStatsKey]) {
       zmq::message_t outId(id.data(), id.size());
       zmq::message_t msgCopy;
-      msgCopy.copy(outData);
+      msgCopy.copy(msg);
 
       try {
         socket.send(outId, zmq::send_flags::sndmore);

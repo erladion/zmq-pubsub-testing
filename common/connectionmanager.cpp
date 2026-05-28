@@ -292,7 +292,7 @@ void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
     }
   }
 
-  std::string data = msg.has_payload() ? msg.payload().value() : msg.raw_data();
+  const std::string& data = msg.has_payload() ? msg.payload().SerializeAsString() : msg.raw_data();
   for (auto& entry : callbacks) {
     try {
       if (entry.func) {

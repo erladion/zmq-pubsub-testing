@@ -2,6 +2,7 @@
 
 #include "logger.h"
 #include "messagekeys.h"
+#include "protoutils.h"
 
 #include <iostream>
 
@@ -97,17 +98,14 @@ void ZmqWorker::run() {
     }
 
     broker::BrokerPayload outbound;
-
     while (m_controlQueue.try_pop(outbound)) {
-      std::string data = outbound.SerializeAsString();
-      zmq::message_t zMsg(data.begin(), data.end());
+      zmq::message_t zMsg = createZmqMsg(outbound);
       socket.send(zMsg, zmq::send_flags::none);
     }
 
     int messagesSent = 0;
     while (messagesSent < 100 && m_outboundQueue.try_pop(outbound)) {
-      std::string data = outbound.SerializeAsString();
-      zmq::message_t zMsg(data.begin(), data.end());
+      zmq::message_t zMsg = createZmqMsg(outbound);
       socket.send(zMsg, zmq::send_flags::none);
       messagesSent++;
     }
@@ -136,7 +134,6 @@ void ZmqWorker::sendHeartbeat(zmq::socket_t& socket) {
   hb.set_sender_id(m_config.clientId);
   hb.set_topic("");
 
-  std::string data = hb.SerializeAsString();
-  zmq::message_t zMsg(data.begin(), data.end());
+  zmq::message_t zMsg = createZmqMsg(hb);
   socket.send(zMsg, zmq::send_flags::none);
 }

@@ -60,9 +60,8 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
   auto lastCleanup = std::chrono::steady_clock::now();
 
+  broker::BrokerPayload msg;
   while (m_running) {
-    google::protobuf::Arena arena;
-
     // Poll for local clients
     zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
     zmq::poll(items, 1, std::chrono::milliseconds(20));
@@ -88,13 +87,9 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           m_totalBytes += payload.size();
           m_bytesInterval += payload.size();
 
-#if GOOGLE_PROTOBUF_VERSION >= 4023000
-          broker::BrokerPayload* msg = google::protobuf::Arena::Create<broker::BrokerPayload>(&arena);
-#else
-          broker::BrokerPayload* msg = google::protobuf::Arena::CreateMessage<broker::BrokerPayload>(&arena);
-#endif
-          if (msg->ParseFromArray(payload.data(), payload.size())) {
-            processMessage(socket, inspectorSocket, *msg, identity.to_string(), false);
+          msg.Clear();
+          if (msg.ParseFromArray(payload.data(), payload.size())) {
+            processMessage(socket, inspectorSocket, msg, identity.to_string(), false);
           }
         }
       }

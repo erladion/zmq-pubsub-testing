@@ -54,6 +54,7 @@ void ZmqWorker::run() {
     m_statusCallback(m_isOnline);
   }
 
+  broker::BrokerPayload payload;
   while (m_running) {
     zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
 
@@ -71,7 +72,7 @@ void ZmqWorker::run() {
           }
         }
 
-        broker::BrokerPayload payload;
+        payload.Clear();
         if (payload.ParseFromArray(msg.data(), msg.size())) {
           if (payload.handler_key() == Keys::HEARTBEAT_ACK) {
           } else if (m_inboundQueue) {
@@ -97,16 +98,17 @@ void ZmqWorker::run() {
       }
     }
 
-    broker::BrokerPayload outbound;
-    while (m_controlQueue.try_pop(outbound)) {
-      zmq::message_t zMsg = createZmqMsg(outbound);
-      socket.send(zMsg, zmq::send_flags::none);
+    payload.Clear();
+    while (m_controlQueue.try_pop(payload)) {
+      zmq::message_t msg = createZmqMsg(payload);
+      socket.send(msg, zmq::send_flags::none);
     }
 
     int messagesSent = 0;
-    while (messagesSent < 100 && m_outboundQueue.try_pop(outbound)) {
-      zmq::message_t zMsg = createZmqMsg(outbound);
-      socket.send(zMsg, zmq::send_flags::none);
+    payload.Clear();
+    while (messagesSent < 100 && m_outboundQueue.try_pop(payload)) {
+      zmq::message_t msg = createZmqMsg(payload);
+      socket.send(msg, zmq::send_flags::none);
       messagesSent++;
     }
 

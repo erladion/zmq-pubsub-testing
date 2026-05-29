@@ -7,6 +7,8 @@
 #include <iostream>
 
 #include "connectionmanager.h"
+#include "generated/update.pb.h"
+#include "logger.h"
 
 struct TestStruct {
   int d;
@@ -26,16 +28,19 @@ int main(int argc, char* argv[]) {
   ConnectionManager::init(config);
 
   ConnectionManager::registerCallback("test", [](const std::string& message) {
-    std::cerr << message << std::endl;
+    Logger::Log(Logger::INFO, "\n" + message);
 
     ConnectionManager::sendMessage("MessageReceived", "Send a response");
   });
 
   ConnectionManager::registerCallback("struct", [](const TestStruct& s) {
-    std::cerr << s.d << std::endl;
-    std::cerr << s.dd << std::endl;
-    std::cerr << s.ddd << std::endl;
-    std::cerr << s.h << std::endl;
+    Logger::Log(Logger::INFO, "Receiving a struct");
+    Logger::Log(Logger::INFO, "\n" + std::to_string(s.d) + "\n" + std::to_string(s.dd) + "\n" + std::to_string(s.ddd) + "\n" + std::to_string(s.h));
+  });
+
+  ConnectionManager::registerCallback("protobuf", [](const communication::Update& s) {
+    Logger::Log(Logger::INFO, "Receiving a protobuf");
+    Logger::Log(Logger::INFO, "\n" + s.id() + "\n" + s.message() + "\n" + std::to_string(s.timestamp_utc()));
   });
 
   QTimer t;

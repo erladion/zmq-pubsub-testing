@@ -5,6 +5,8 @@
 #include <QTimer>
 
 #include "connectionmanager.h"
+#include "generated/update.pb.h"
+#include "logger.h"
 
 struct TestStruct {
   int d;
@@ -36,6 +38,7 @@ int main(int argc, char* argv[]) {
   });
 
   QObject::connect(&t, &QTimer::timeout, []() {
+    Logger::Log(Logger::INFO, "Sending a struct");
     TestStruct s;
     s.d = 42;
     s.dd = 1337.0;
@@ -45,11 +48,22 @@ int main(int argc, char* argv[]) {
     ConnectionManager::sendMessage("struct", s);
   });
 
+  QTimer t2;
+  QObject::connect(&t2, &QTimer::timeout, []() {
+    Logger::Log(Logger::INFO, "Sending a protobuf");
+    communication::Update upd;
+
+    upd.set_id("client2");
+    upd.set_message("message from client2");
+    upd.set_timestamp_utc(QDateTime::currentMSecsSinceEpoch());
+
+    ConnectionManager::sendMessage("protobuf", upd);
+  });
+
   ConnectionManager::registerCallback("Hejsan", [](int t) { std::cout << t << std::endl; });
 
   t.start(2000);
-
-  // QTimer::singleShot(5000, [&]() { ZmqClientManager::sendFile("file", "/mnt/c/Users/johan/Downloads/logo1.png"); });
+  t2.start(1500);
 
   return a.exec();
 }

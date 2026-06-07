@@ -46,8 +46,13 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
   zmq::socket_t inspectorSocket(m_context, ZMQ_PUB);
   inspectorSocket.set(zmq::sockopt::linger, 0);
-  inspectorSocket.bind("tcp://*:5556");  // The dedicated inspector port
-  Logger::Log(Logger::INFO, "Wireshark Mirror Port active on tcp://*:5556");
+  const std::string inspectorConnection = "tcp://*:5556";
+  try {
+    inspectorSocket.bind(inspectorConnection);  // The dedicated inspector port
+    Logger::Log(Logger::INFO, "Inspector Port active on " + inspectorConnection);
+  } catch (const zmq::error_t& e) {
+    Logger::Log(Logger::ERROR, "Failed to bind to " + inspectorConnection + ": " + e.what());
+  }
 
   for (const auto& addr : addresses) {
     try {

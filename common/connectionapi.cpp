@@ -38,6 +38,32 @@ int sendData(const char* topic, const char* data, int len) {
   return ConnectionManager::sendDataRaw(topic, data, len) ? SUCCESS : ERROR_NO_CONNECTION;
 }
 
+int replyToSender(const char* data, int len) {
+  if (!data) {
+    return ERROR_INVALID_ARGS;
+  }
+  return ConnectionManager::replyToSender(std::string(data, len)) ? SUCCESS : ERROR_NO_CONNECTION;
+}
+
+int sendRequest(const char* topic, const char* payload, int payloadLen, char* outBuffer, int outBufferCap, int* outLen, int timeoutMs) {
+  if (!topic || !payload || !outBuffer || !outLen) {
+    return ERROR_INVALID_ARGS;
+  }
+
+  std::string response;
+  if (!ConnectionManager::sendRequest(topic, std::string(payload, payloadLen), response, timeoutMs)) {
+    return ERROR_GENERIC;
+  }
+
+  if (static_cast<int>(response.size()) > outBufferCap) {
+    return ERROR_INVALID_ARGS;
+  }
+
+  std::memcpy(outBuffer, response.data(), response.size());
+  *outLen = static_cast<int>(response.size());
+  return SUCCESS;
+}
+
 void registerCallback(const char* topic, Message_Callback callback, void* userData) {
   if (!topic || !callback) {
     return;

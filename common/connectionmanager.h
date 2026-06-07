@@ -212,8 +212,22 @@ public:
   static bool replyToSender(const std::string& data);
 
   template <typename T>
+  static typename std::enable_if<DataSerializer<T>::is_specialized, bool>::type replyToSender(const T& value) {
+    return instance().replyToSenderInternal(DataSerializer<T>::serialize(value));
+  }
+
+  template <typename T>
   static typename std::enable_if<std::is_base_of<google::protobuf::Message, T>::value, bool>::type replyToSender(const T& protobufMessage) {
     return instance().replyToSenderInternal(protobufMessage);
+  }
+
+  template <typename T>
+  static typename std::enable_if<std::is_trivially_copyable<T>::value && std::is_standard_layout<T>::value && !std::is_pointer<T>::value &&
+                                     !std::is_array<T>::value && !std::is_base_of<google::protobuf::Message, T>::value &&
+                                     !DataSerializer<T>::is_specialized,
+                                 bool>::type
+  replyToSender(const T& value) {
+    return instance().replyToSenderInternal(std::string(reinterpret_cast<const char*>(&value), sizeof(T)));
   }
 
 private:

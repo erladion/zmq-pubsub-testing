@@ -43,6 +43,13 @@ CONN_API void shutdownConnection();
 CONN_API int sendData(const char* topic, const char* data, int len);
 CONN_API int sendMessage(const char* topic, const char* text);
 
+CONN_API int replyToSender(const char* data, int len);
+
+// Blocks the calling thread for up to timeoutMs waiting on the reply. On success, fills outBuffer
+// (capacity outBufferCap) and outLen with the response. Returns ERROR_INVALID_ARGS if outBufferCap
+// is too small for the response, ERROR_GENERIC on timeout/failure.
+CONN_API int sendRequest(const char* topic, const char* payload, int payloadLen, char* outBuffer, int outBufferCap, int* outLen, int timeoutMs);
+
 CONN_API void registerCallback(const char* topic, Message_Callback callback, void* userData);
 
 #ifdef __cplusplus

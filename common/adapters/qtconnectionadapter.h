@@ -47,6 +47,21 @@ public:
     return ConnectionManager::sendMessage(key, payload);
   }
 
+  template <typename T>
+  static bool replyToSender(const T& payload) {
+    return ConnectionManager::replyToSender(payload);
+  }
+
+  // Blocks the calling thread for up to timeoutMs waiting on the reply - never call from the UI thread.
+  static bool sendRequest(const std::string& topic, const std::string& payload, std::string& outResponse, int timeoutMs = 5000) {
+    return ConnectionManager::sendRequest(topic, payload, outResponse, timeoutMs);
+  }
+
+  template <typename ReqT, typename ResT>
+  static bool sendRequest(const std::string& topic, const ReqT& payload, ResT& outResponse, int timeoutMs = 5000) {
+    return ConnectionManager::sendRequest(topic, payload, outResponse, timeoutMs);
+  }
+
   static void unregisterCallback(const std::string& key, QObject* context) { ConnectionManager::unregisterCallback(key, context); }
 
   // Lambdas

@@ -37,6 +37,11 @@ add_subdirectory(client2)
 add_subdirectory(server)
 add_subdirectory(inspector)
 
+option(BUILD_TESTING "Build the test suite" ON)
+if (BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS server client1 client2
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

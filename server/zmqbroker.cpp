@@ -46,10 +46,10 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
   zmq::socket_t inspectorSocket(m_context, ZMQ_PUB);
   inspectorSocket.set(zmq::sockopt::linger, 0);
-  const std::string inspectorConnection = "tcp://*:5556";
+  const std::string inspectorConnection = "ipc:///tmp/broker_inspector.sock";
   try {
     inspectorSocket.bind(inspectorConnection);  // The dedicated inspector port
-    Logger::Log(Logger::INFO, "Inspector Port active on " + inspectorConnection);
+    Logger::Log(Logger::INFO, "Inspector socket active on " + inspectorConnection);
   } catch (const zmq::error_t& e) {
     Logger::Log(Logger::ERROR, "Failed to bind to " + inspectorConnection + ": " + e.what());
   }

@@ -21,7 +21,7 @@ void InspectorWorker::run() {
   m_running = true;
   zmq::context_t ctx(1);
   zmq::socket_t inspector(ctx, ZMQ_SUB);
-  inspector.connect("tcp://127.0.0.1:5556");
+  inspector.connect("ipc:///tmp/broker_inspector.sock");
   inspector.set(zmq::sockopt::subscribe, "");
 
   while (m_running) {

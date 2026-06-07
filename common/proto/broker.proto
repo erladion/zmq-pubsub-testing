@@ -17,6 +17,8 @@ message BrokerPayload {
   int32 sequence_number = 8;
   int32 sequence_count = 9;
   bytes raw_data = 10;
+
+  string reply_topic = 11;
 }
 
 service BrokerService {

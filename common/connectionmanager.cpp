@@ -14,6 +14,14 @@
 
 using namespace std::string_literals;
 
+namespace {
+// Reply address for whichever request is currently being handled on this
+// thread - empty when the in-flight message isn't a sendRequest(). Lets
+// replyToSender() work from inside a plain MessageCallback without changing
+// its signature for every handler.
+thread_local std::string t_currentReplyTopic;
+}  // namespace
+
 std::shared_ptr<ConnectionManager> ConnectionManager::m_instance = nullptr;
 std::mutex ConnectionManager::m_initMutex;
 
@@ -112,7 +120,13 @@ bool ConnectionManager::sendRequest(const std::string& requestTopic, const std::
       },
       tempInstanceKey);
 
-  sendData(requestTopic, payload);
+  broker::BrokerPayload request;
+  request.set_handler_key(requestTopic);
+  request.set_sender_id(m_instance->m_clientId);
+  request.set_topic(requestTopic);
+  request.set_raw_data(payload);
+  request.set_reply_topic(replyTopic);
+  m_instance->sendRawEnvelope(request);
 
   bool success = false;
   if (future.wait_for(std::chrono::milliseconds(timeoutMs)) == std::future_status::ready) {
@@ -258,6 +272,46 @@ bool ConnectionManager::sendDataInternal(const std::string& key, const std::stri
   return sendRawEnvelope(msg);
 }
 
+bool ConnectionManager::replyToSender(const std::string& data) {
+  std::shared_ptr<ConnectionManager> instance;
+  {
+    std::lock_guard<std::mutex> lock(m_initMutex);
+    instance = m_instance;
+  }
+  if (instance == nullptr) {
+    return false;
+  }
+  return instance->replyToSenderInternal(data);
+}
+
+bool ConnectionManager::replyToSenderInternal(const std::string& data) {
+  if (t_currentReplyTopic.empty()) {
+    Logger::Log(Logger::WARNING, "replyToSender() called outside of a request context - nothing to reply to.");
+    return false;
+  }
+
+  broker::BrokerPayload reply;
+  reply.set_handler_key(t_currentReplyTopic);
+  reply.set_sender_id(m_clientId);
+  reply.set_topic(t_currentReplyTopic);
+  reply.set_raw_data(data);
+  return sendRawEnvelope(reply);
+}
+
+bool ConnectionManager::replyToSenderInternal(const google::protobuf::Message& protobufMessage) {
+  if (t_currentReplyTopic.empty()) {
+    Logger::Log(Logger::WARNING, "replyToSender() called outside of a request context - nothing to reply to.");
+    return false;
+  }
+
+  broker::BrokerPayload reply;
+  reply.set_handler_key(t_currentReplyTopic);
+  reply.set_sender_id(m_clientId);
+  reply.set_topic(t_currentReplyTopic);
+  reply.mutable_payload()->PackFrom(protobufMessage);
+  return sendRawEnvelope(reply);
+}
+
 void ConnectionManager::processingLoop() {
   broker::BrokerPayload msg;
   while (m_queue.pop(msg)) {
@@ -293,6 +347,8 @@ void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
   }
 
   const std::string& data = msg.has_payload() ? msg.payload().SerializeAsString() : msg.raw_data();
+
+  t_currentReplyTopic = msg.reply_topic();
   for (auto& entry : callbacks) {
     try {
       if (entry.func) {
@@ -304,6 +360,7 @@ void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
       Logger::Log(Logger::ERROR, "Unknown User Exception");
     }
   }
+  t_currentReplyTopic.clear();
 }
 
 void ConnectionManager::performRegistration(const std::string& key, MessageCallback callback, void* instance) {

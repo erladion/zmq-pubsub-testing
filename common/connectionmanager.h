@@ -209,6 +209,13 @@ public:
     return false;
   }
 
+  static bool replyToSender(const std::string& data);
+
+  template <typename T>
+  static typename std::enable_if<std::is_base_of<google::protobuf::Message, T>::value, bool>::type replyToSender(const T& protobufMessage) {
+    return instance().replyToSenderInternal(protobufMessage);
+  }
+
 private:
   ConnectionManager(const ConnectionConfig& config);
   ~ConnectionManager();
@@ -228,6 +235,9 @@ private:
     envelope.mutable_payload()->PackFrom(protobufMessage);
     return sendRawEnvelope(envelope);
   }
+
+  bool replyToSenderInternal(const std::string& data);
+  bool replyToSenderInternal(const google::protobuf::Message& protobufMessage);
 
   void processingLoop();
   void handleMessage(const broker::BrokerPayload& msg);

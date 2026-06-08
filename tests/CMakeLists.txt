@@ -16,6 +16,7 @@ add_executable(broker_tests
   support/test_helpers.h
   any_payload_roundtrip_test.cpp
   request_reply_test.cpp
+  safequeue_test.cpp
 )
 
 target_include_directories(broker_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

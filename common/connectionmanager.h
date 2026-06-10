@@ -231,6 +231,11 @@ private:
   void resubscribeAll();
   static void registerInternal(const std::string& key, MessageCallback callback, void* instance);
 
+  // Snapshot of m_instance taken under m_initMutex. Callers keep the returned
+  // shared_ptr alive for the duration of their work, so a concurrent
+  // shutdown() can't destroy the instance out from under them.
+  static std::shared_ptr<ConnectionManager> getInstance();
+
   bool sendDataInternal(const std::string& key, const std::string_view& data);
   bool sendRawEnvelope(const broker::BrokerPayload& envelope);
 
@@ -251,6 +256,7 @@ private:
   void handleMessage(const broker::BrokerPayload& msg);
 
   void performRegistration(const std::string& key, MessageCallback callback, void* instance);
+  void performUnregistration(const std::string& key, void* instance);
   broker::BrokerPayload createControlEnvelope(const std::string_view& controlKey, const std::string& topic);
 
 private:

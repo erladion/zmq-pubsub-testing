@@ -70,36 +70,22 @@ ConnectionManager& ConnectionManager::instance() {
   return *m_instance;
 }
 
+std::shared_ptr<ConnectionManager> ConnectionManager::getInstance() {
+  std::lock_guard<std::mutex> lock(m_initMutex);
+  return m_instance;
+}
+
 void ConnectionManager::unregisterCallback(const std::string& key, void* instance) {
-  if (!m_instance) {
+  std::shared_ptr<ConnectionManager> self = getInstance();
+  if (!self) {
     return;
   }
-
-  std::lock_guard<std::mutex> lock(m_instance->m_mapMutex);
-
-  if (m_instance->m_msgHandlers.count(key)) {
-    auto& vec = m_instance->m_msgHandlers[key];
-
-    auto newEnd = std::remove_if(vec.begin(), vec.end(), [instance](const CallbackEntry& entry) { return entry.instance == instance; });
-
-    vec.erase(newEnd, vec.end());
-
-    if (vec.empty()) {
-      m_instance->m_msgHandlers.erase(key);
-
-      if (m_instance->m_connected) {
-        broker::BrokerPayload unsubMsg;
-        unsubMsg.set_handler_key(Keys::UNSUBSCRIBE);
-        unsubMsg.set_sender_id(m_instance->m_clientId);
-        unsubMsg.set_topic(key);
-        m_instance->sendRawEnvelope(unsubMsg);
-      }
-    }
-  }
+  self->performUnregistration(key, instance);
 }
 
 bool ConnectionManager::sendRequest(const std::string& requestTopic, const std::string& payload, std::string& outResponse, int timeoutMs) {
-  if (!m_instance) {
+  std::shared_ptr<ConnectionManager> self = getInstance();
+  if (!self) {
     return false;
   }
 
@@ -110,7 +96,11 @@ bool ConnectionManager::sendRequest(const std::string& requestTopic, const std::
 
   const std::string replyTopic = requestTopic + generateUUID();
 
-  registerInternal(
+  // Register and unregister directly on the held instance: routing through the
+  // static registerInternal()/unregisterCallback() would re-read m_instance,
+  // and a concurrent shutdown() in between would strand the registration in
+  // the pending list.
+  self->performRegistration(
       replyTopic,
       [promise](const std::string& responseData) {
         try {
@@ -122,11 +112,11 @@ bool ConnectionManager::sendRequest(const std::string& requestTopic, const std::
 
   broker::BrokerPayload request;
   request.set_handler_key(requestTopic);
-  request.set_sender_id(m_instance->m_clientId);
+  request.set_sender_id(self->m_clientId);
   request.set_topic(requestTopic);
   request.set_raw_data(payload);
   request.set_reply_topic(replyTopic);
-  m_instance->sendRawEnvelope(request);
+  self->sendRawEnvelope(request);
 
   bool success = false;
   if (future.wait_for(std::chrono::milliseconds(timeoutMs)) == std::future_status::ready) {
@@ -136,7 +126,7 @@ bool ConnectionManager::sendRequest(const std::string& requestTopic, const std::
     Logger::Log(Logger::WARNING, "Timeout waiting for reply on: " + replyTopic);
   }
 
-  unregisterCallback(replyTopic, tempInstanceKey);
+  self->performUnregistration(replyTopic, tempInstanceKey);
 
   return success;
 }
@@ -191,37 +181,25 @@ ConnectionManager::~ConnectionManager() {
 }
 
 bool ConnectionManager::sendMessage(const std::string& key, const std::string& message) {
-  std::shared_ptr<ConnectionManager> instance;
-  {
-    std::lock_guard<std::mutex> lock(m_initMutex);
-    instance = m_instance;
-  }
-  if (instance == nullptr) {
+  std::shared_ptr<ConnectionManager> self = getInstance();
+  if (self == nullptr) {
     return false;
   }
-  return instance->sendDataInternal(key, message);
+  return self->sendDataInternal(key, message);
 }
 bool ConnectionManager::sendData(const std::string& key, const std::string_view& data) {
-  std::shared_ptr<ConnectionManager> instance;
-  {
-    std::lock_guard<std::mutex> lock(m_initMutex);
-    instance = m_instance;
-  }
-  if (instance == nullptr) {
+  std::shared_ptr<ConnectionManager> self = getInstance();
+  if (self == nullptr) {
     return false;
   }
-  return instance->sendDataInternal(key, data);
+  return self->sendDataInternal(key, data);
 }
 bool ConnectionManager::sendDataRaw(const std::string& key, const char* data, int len) {
-  std::shared_ptr<ConnectionManager> instance;
-  {
-    std::lock_guard<std::mutex> lock(m_initMutex);
-    instance = m_instance;
-  }
-  if (instance == nullptr) {
+  std::shared_ptr<ConnectionManager> self = getInstance();
+  if (self == nullptr) {
     return false;
   }
-  return instance->sendDataInternal(key, std::string(data, len));
+  return self->sendDataInternal(key, std::string(data, len));
 }
 
 void ConnectionManager::registerCallback(const std::string& key, MessageCallback callback) {
@@ -273,15 +251,11 @@ bool ConnectionManager::sendDataInternal(const std::string& key, const std::stri
 }
 
 bool ConnectionManager::replyToSender(const std::string& data) {
-  std::shared_ptr<ConnectionManager> instance;
-  {
-    std::lock_guard<std::mutex> lock(m_initMutex);
-    instance = m_instance;
-  }
-  if (instance == nullptr) {
+  std::shared_ptr<ConnectionManager> self = getInstance();
+  if (self == nullptr) {
     return false;
   }
-  return instance->replyToSenderInternal(data);
+  return self->replyToSenderInternal(data);
 }
 
 bool ConnectionManager::replyToSenderInternal(const std::string& data) {
@@ -370,6 +344,31 @@ void ConnectionManager::performRegistration(const std::string& key, MessageCallb
 
   if (m_connected) {
     sendRawEnvelope(createControlEnvelope(Keys::SUBSCRIBE, key));
+  }
+}
+
+void ConnectionManager::performUnregistration(const std::string& key, void* instance) {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+
+  auto it = m_msgHandlers.find(key);
+  if (it == m_msgHandlers.end()) {
+    return;
+  }
+
+  auto& vec = it->second;
+  auto newEnd = std::remove_if(vec.begin(), vec.end(), [instance](const CallbackEntry& entry) { return entry.instance == instance; });
+  vec.erase(newEnd, vec.end());
+
+  if (vec.empty()) {
+    m_msgHandlers.erase(it);
+
+    if (m_connected) {
+      broker::BrokerPayload unsubMsg;
+      unsubMsg.set_handler_key(Keys::UNSUBSCRIBE);
+      unsubMsg.set_sender_id(m_clientId);
+      unsubMsg.set_topic(key);
+      sendRawEnvelope(unsubMsg);
+    }
   }
 }
 

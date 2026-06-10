@@ -6,7 +6,6 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include <mutex>
 #include <atomic>
 #include <deque>
 #include <memory>
@@ -51,8 +50,9 @@ private:
 
   std::string m_brokerId;
 
-  // Track subscriptions
-  std::mutex m_stateMutex;
+  // Client, subscription, dedup, and stats state is owned exclusively by the
+  // broker thread (run() and its callees) and intentionally unsynchronized.
+  // Other threads talk to it only through m_peerInboundQueue.
   std::unordered_map<std::string, ClientState> m_clients;
 
   std::unordered_map<std::string, std::vector<std::string>> m_topicSubscribers;
@@ -61,7 +61,6 @@ private:
 
   SafeQueue<broker::BrokerPayload> m_peerInboundQueue;
 
-  std::mutex m_historyMutex;
   std::unordered_set<std::string> m_seenMessageIds;
   std::deque<std::string> m_messageIdOrder;
 

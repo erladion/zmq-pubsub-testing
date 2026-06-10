@@ -110,8 +110,6 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
     // Cleanup zombies
     if (now - lastCleanup > std::chrono::seconds(2)) {
-      std::lock_guard<std::mutex> lock(m_stateMutex);
-
       for (auto it = m_clients.begin(); it != m_clients.end();) {
         auto elapsed = now - it->second.lastSeen;
 
@@ -149,17 +147,14 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
   // Local clients
   if (!isFromPeer) {
     if (key == Keys::DISCONNECT) {
-      std::lock_guard<std::mutex> lock(m_stateMutex);
       removeClient(senderId, "Disconnect");
       return;
     }
 
     bool newClient = (m_clients.find(senderId) == m_clients.end());
-    {
-      std::lock_guard<std::mutex> lock(m_stateMutex);
-      m_clients[senderId].identity = senderId;
-      m_clients[senderId].lastSeen = std::chrono::steady_clock::now();
-    }
+    ClientState& client = m_clients[senderId];
+    client.identity = senderId;
+    client.lastSeen = std::chrono::steady_clock::now();
 
     if (newClient) {
       Logger::Log(Logger::INFO, "New client: " + senderId + ". Requesting Subscription Reset");
@@ -200,7 +195,6 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     }
 
     if (key == Keys::SUBSCRIBE) {
-      std::lock_guard<std::mutex> lock(m_stateMutex);
       auto result = m_clients[senderId].subscriptions.insert(msg.topic());
       if (result.second) {
         m_topicSubscribers[msg.topic()].push_back(senderId);
@@ -210,8 +204,6 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     }
 
     if (key == Keys::UNSUBSCRIBE) {
-      std::lock_guard<std::mutex> lock(m_stateMutex);
-
       // Remove topic from the client's known subscriptions
       if (m_clients[senderId].subscriptions.erase(msg.topic()) > 0) {
         // Remove the client from the broker's topic routing map
@@ -250,8 +242,6 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
 
   // Local subscribers
   {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
-
     const std::vector<std::string>* exactSubs = nullptr;
     auto exactIt = m_topicSubscribers.find(msg.topic());
     if (exactIt != m_topicSubscribers.end()) {
@@ -320,7 +310,6 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
 }
 
 bool ZmqBroker::isDuplicate(const std::string& uuid) {
-  std::lock_guard<std::mutex> lock(m_historyMutex);
   if (m_seenMessageIds.count(uuid)) {
     return true;
   }
@@ -336,8 +325,6 @@ bool ZmqBroker::isDuplicate(const std::string& uuid) {
 }
 
 void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSocket) {
-  std::lock_guard<std::mutex> lock(m_stateMutex);
-
   auto uptime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - m_startTime).count();
   const double kbSec = static_cast<double>(m_bytesInterval) / 1024.0;
 

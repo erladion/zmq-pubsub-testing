@@ -252,17 +252,34 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
   {
     std::lock_guard<std::mutex> lock(m_stateMutex);
 
-    if (m_topicSubscribers.count(msg.topic())) {
+    const std::vector<std::string>* exactSubs = nullptr;
+    auto exactIt = m_topicSubscribers.find(msg.topic());
+    if (exactIt != m_topicSubscribers.end()) {
+      exactSubs = &exactIt->second;
+    }
+
+    // An empty-topic subscription is a wildcard: it receives every topic.
+    // Peer links rely on this (connectToPeer subscribes to "").
+    const std::vector<std::string>* wildcardSubs = nullptr;
+    if (!msg.topic().empty()) {
+      auto wildcardIt = m_topicSubscribers.find("");
+      if (wildcardIt != m_topicSubscribers.end()) {
+        wildcardSubs = &wildcardIt->second;
+      }
+    }
+
+    if (exactSubs || wildcardSubs) {
       zmq::message_t outData = createZmqMsg(msg);
-      for (const auto& id : m_topicSubscribers[msg.topic()]) {
+
+      auto deliver = [&](const std::string& id) {
         // Don't echo back to sender if it's a local client
         if (!isFromPeer && id == senderId) {
-          continue;
+          return;
         }
 
         // Verify client is still connected (safety check)
         if (m_clients.find(id) == m_clients.end()) {
-          continue;
+          return;
         }
 
         zmq::message_t outId(id.data(), id.size());
@@ -273,8 +290,24 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
         try {
           socket.send(outId, zmq::send_flags::sndmore);
           socket.send(msgCopy, zmq::send_flags::none);
-        } catch (const zmq::error_t& e) {
+        } catch (const zmq::error_t&) {
           // Client likely disconnected, will be picked up by Zombie killer
+        }
+      };
+
+      if (exactSubs) {
+        for (const auto& id : *exactSubs) {
+          deliver(id);
+        }
+      }
+
+      if (wildcardSubs) {
+        for (const auto& id : *wildcardSubs) {
+          // Skip clients already served by their exact subscription
+          if (exactSubs && std::find(exactSubs->begin(), exactSubs->end(), id) != exactSubs->end()) {
+            continue;
+          }
+          deliver(id);
         }
       }
     }
@@ -358,13 +391,23 @@ void ZmqBroker::connectToPeer(const std::string& peerAddress) {
   config.clientId = "BrokerLink-" + m_brokerId.substr(0, 8);
 
   auto worker = std::make_unique<ZmqWorker>(config, nullptr, nullptr);
-  worker->setMessageCallback([this](const broker::BrokerPayload& msg) { m_peerInboundQueue.push(msg); });
+  ZmqWorker* link = worker.get();
+  worker->setMessageCallback([this, link, linkId = config.clientId](const broker::BrokerPayload& msg) {
+    // The remote broker answers our first message (and any reappearance after
+    // it has timed us out) with a RESET request instead of processing it. The
+    // wildcard subscription must be (re-)sent in response, or the remote will
+    // never route anything to this link.
+    if (msg.handler_key() == Keys::RESET) {
+      broker::BrokerPayload sub;
+      sub.set_handler_key(Keys::SUBSCRIBE);
+      sub.set_sender_id(linkId);
+      sub.set_topic("");  // Empty topic = wildcard, see processMessage
+      link->writeControlMessage(sub);
+      return;
+    }
+    m_peerInboundQueue.push(msg);
+  });
   worker->start();
-
-  broker::BrokerPayload sub;
-  sub.set_handler_key(Keys::SUBSCRIBE);
-  sub.set_topic("");  // All topics
-  worker->writeControlMessage(sub);
 
   Logger::Log(Logger::INFO, "Connected to Peer: " + peerAddress);
   m_peers.push_back(std::move(worker));

@@ -18,6 +18,7 @@ add_executable(broker_tests
   reply_to_sender_context_test.cpp
   request_reply_test.cpp
   safequeue_test.cpp
+  wildcard_subscription_test.cpp
 )
 
 target_include_directories(broker_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

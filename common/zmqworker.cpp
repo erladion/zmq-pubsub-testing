@@ -104,14 +104,17 @@ void ZmqWorker::run() {
     payload.Clear();
     while (m_controlQueue.try_pop(payload)) {
       zmq::message_t msg = createZmqMsg(payload);
-      socket.send(msg, zmq::send_flags::none);
+      // dontwait: a full send pipe (broker down or stalled) must not wedge
+      // this thread - stop() needs the loop alive to join it. Overflow is
+      // dropped; subscriptions resync via the RESET handshake on reconnect.
+      (void)socket.send(msg, zmq::send_flags::dontwait);
       didWork = true;
     }
 
     payload.Clear();
     while (m_outboundQueue.try_pop(payload)) {
       zmq::message_t msg = createZmqMsg(payload);
-      socket.send(msg, zmq::send_flags::none);
+      (void)socket.send(msg, zmq::send_flags::dontwait);
       didWork = true;
     }
 
@@ -140,5 +143,5 @@ void ZmqWorker::sendHeartbeat(zmq::socket_t& socket) {
   hb.set_topic("");
 
   zmq::message_t zMsg = createZmqMsg(hb);
-  socket.send(zMsg, zmq::send_flags::none);
+  (void)socket.send(zMsg, zmq::send_flags::dontwait);
 }

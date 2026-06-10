@@ -18,6 +18,7 @@ add_executable(broker_tests
   reply_to_sender_context_test.cpp
   request_reply_test.cpp
   safequeue_test.cpp
+  shutdown_test.cpp
   wildcard_subscription_test.cpp
 )
 

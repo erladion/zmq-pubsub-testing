@@ -29,14 +29,23 @@ void ZmqBroker::start(const std::vector<std::string>& bindAddresses) {
 void ZmqBroker::stop() {
   m_running = false;
 
+  // Wake any peer worker blocked pushing into the inbound queue; without
+  // this, the peer joins below can wait forever on a thread wedged in the
+  // message callback once the broker thread is no longer draining.
+  m_peerInboundQueue.stop();
+
   if (m_brokerThread.joinable()) {
     m_brokerThread.join();
   }
 
-  for (auto& peer : m_peers) {
+  std::vector<std::unique_ptr<ZmqWorker>> peers;
+  {
+    std::lock_guard<std::mutex> lock(m_peersMutex);
+    peers.swap(m_peers);
+  }
+  for (auto& peer : peers) {
     peer->stop();
   }
-  m_peers.clear();
 }
 
 void ZmqBroker::run(const std::vector<std::string>& addresses) {
@@ -166,9 +175,15 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
       resetMsg.set_topic("");
 
       zmq::message_t outData = createZmqMsg(resetMsg);
+      // All ROUTER sends use dontwait: a slow client with a full pipe must
+      // stall its own messages, not the broker loop (a blocked send here also
+      // makes stop() hang). The payload frame is only sent if the identity
+      // frame was accepted - zmq never rejects continuation frames of a
+      // multipart message, so the pair can't be torn apart.
       try {
-        socket.send(outId, zmq::send_flags::sndmore);
-        socket.send(outData, zmq::send_flags::none);
+        if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
+          (void)socket.send(outData, zmq::send_flags::dontwait);
+        }
       } catch (...) {
       }  // Ignore send errors on new clients
 
@@ -186,8 +201,9 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
 
         zmq::message_t outData = createZmqMsg(ack);
         try {
-          socket.send(outId, zmq::send_flags::sndmore);
-          socket.send(outData, zmq::send_flags::none);
+          if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
+            (void)socket.send(outData, zmq::send_flags::dontwait);
+          }
         } catch (...) {
         }
       }
@@ -278,8 +294,9 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
         msgCopy.copy(outData);
 
         try {
-          socket.send(outId, zmq::send_flags::sndmore);
-          socket.send(msgCopy, zmq::send_flags::none);
+          if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
+            (void)socket.send(msgCopy, zmq::send_flags::dontwait);
+          }
         } catch (const zmq::error_t&) {
           // Client likely disconnected, will be picked up by Zombie killer
         }
@@ -304,8 +321,11 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
   }
 
   // Flood peers
-  for (auto& peer : m_peers) {
-    peer->writeMessage(msg);
+  {
+    std::lock_guard<std::mutex> lock(m_peersMutex);
+    for (auto& peer : m_peers) {
+      peer->writeMessage(msg);
+    }
   }
 }
 
@@ -328,10 +348,16 @@ void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSo
   auto uptime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - m_startTime).count();
   const double kbSec = static_cast<double>(m_bytesInterval) / 1024.0;
 
+  size_t peersCount = 0;
+  {
+    std::lock_guard<std::mutex> lock(m_peersMutex);
+    peersCount = m_peers.size();
+  }
+
   broker::SystemStats stats;
   stats.set_broker_id(m_brokerId);
   stats.set_clients_count(m_clients.size());
-  stats.set_peers_count(m_peers.size());
+  stats.set_peers_count(peersCount);
   stats.set_msgs_per_sec(m_msgsInterval);
   stats.set_kb_per_sec(kbSec);
   stats.set_total_msgs(m_totalMessages);
@@ -364,8 +390,9 @@ void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSo
       msgCopy.copy(msg);
 
       try {
-        socket.send(outId, zmq::send_flags::sndmore);
-        socket.send(msgCopy, zmq::send_flags::none);
+        if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
+          (void)socket.send(msgCopy, zmq::send_flags::dontwait);
+        }
       } catch (...) {
       }
     }
@@ -397,7 +424,10 @@ void ZmqBroker::connectToPeer(const std::string& peerAddress) {
   worker->start();
 
   Logger::Log(Logger::INFO, "Connected to Peer: " + peerAddress);
-  m_peers.push_back(std::move(worker));
+  {
+    std::lock_guard<std::mutex> lock(m_peersMutex);
+    m_peers.push_back(std::move(worker));
+  }
 }
 
 void ZmqBroker::removeClient(const std::string& clientId, const std::string& reason) {

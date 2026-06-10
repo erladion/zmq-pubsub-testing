@@ -9,6 +9,7 @@
 #include <atomic>
 #include <deque>
 #include <memory>
+#include <mutex>
 
 #include "zmqworker.h"
 #include "safequeue.h"
@@ -57,6 +58,9 @@ private:
 
   std::unordered_map<std::string, std::vector<std::string>> m_topicSubscribers;
 
+  // Exception: peers can be added by the owning thread (connectToPeer) while
+  // the broker thread floods messages to them, hence the dedicated mutex.
+  std::mutex m_peersMutex;
   std::vector<std::unique_ptr<ZmqWorker>> m_peers;
 
   SafeQueue<broker::BrokerPayload> m_peerInboundQueue;

@@ -25,7 +25,9 @@ class ReplyToSenderContextTest : public ::testing::Test {
 protected:
   void TearDown() override {
     ConnectionManager::shutdown();
-    if (m_broker) m_broker->stop();
+    if (m_broker) {
+      m_broker->stop();
+    }
   }
 
   void startBroker() {

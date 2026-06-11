@@ -26,6 +26,11 @@
 class MainWindow : public QMainWindow {
   Q_OBJECT
 
+  // Bound on the in-memory capture: above this the oldest packets are dropped
+  // in batches (batching amortizes the vector erase and table-model churn).
+  static constexpr size_t MaxPacketHistory = 100000;
+  static constexpr size_t TrimChunk = 10000;
+
 public:
   MainWindow(QWidget* parent = nullptr);
   ~MainWindow();
@@ -43,33 +48,33 @@ private:
   void setupSysStatsView();
 
 private:
-  InspectorWorker* m_worker;
-  ZmqWorker* m_injector;
+  InspectorWorker* m_pWorker;
+  ZmqWorker* m_pInjector;
 
   std::vector<InspectorPacket> m_packetHistory;
 
-  QTableView* m_packetView;
-  PacketTableModel* m_tableModel;
-  PacketFilterProxyModel* m_proxyModel;
+  QTableView* m_pPacketView;
+  PacketTableModel* m_pTableModel;
+  PacketFilterProxyModel* m_pProxyModel;
 
-  QTreeWidget* m_protoTree;
-  QTextEdit* m_hexDump;
+  QTreeWidget* m_pProtoTree;
+  QTextEdit* m_pHexDump;
 
-  QDockWidget* m_statsDock;
+  QDockWidget* m_pStatsDock;
 
-  QLabel* m_brokerIdLabel;
-  QLabel* m_uptimeLabel;
-  QLabel* m_clientsLabel;
-  QLabel* m_peersLabel;
-  QLabel* m_msgsSecLabel;
-  QLabel* m_kbSecLabel;
-  QLabel* m_totalMsgsLabel;
+  QLabel* m_pBrokerIdLabel;
+  QLabel* m_pUptimeLabel;
+  QLabel* m_pClientsLabel;
+  QLabel* m_pPeersLabel;
+  QLabel* m_pMsgsSecLabel;
+  QLabel* m_pKbSecLabel;
+  QLabel* m_pTotalMsgsLabel;
 
-  QLineEdit* m_filterBar;
+  QLineEdit* m_pFilterBar;
 
   QSet<QString> m_knownTopics;
-  QPushButton* m_topicFilterButton;
-  QMenu* m_topicMenu;
+  QPushButton* m_pTopicFilterButton;
+  QMenu* m_pTopicMenu;
 };
 
 #endif

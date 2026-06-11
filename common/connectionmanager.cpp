@@ -47,12 +47,12 @@ void ConnectionManager::shutdown() {
     if (m_instance) {
       m_instance->m_running = false;
 
-      if (m_instance->m_connected && m_instance->m_worker) {
+      if (m_instance->m_connected && m_instance->m_pWorker) {
         broker::BrokerPayload byeMsg;
         byeMsg.set_handler_key(Keys::DISCONNECT);
         byeMsg.set_sender_id(m_instance->m_clientId);
         byeMsg.set_topic("");
-        m_instance->m_worker->writeControlMessage(byeMsg);
+        m_instance->m_pWorker->writeControlMessage(byeMsg);
       }
 
       tmp = m_instance;
@@ -141,14 +141,14 @@ ConnectionManager::ConnectionManager(const ConnectionConfig& config) : m_clientI
   };
 
   if (config.protocol == ProtocolType::ZMQ) {
-    m_worker = std::make_unique<ZmqWorker>(config, &m_queue, statusHandler);
+    m_pWorker = std::make_unique<ZmqWorker>(config, &m_queue, statusHandler);
   } else if (config.protocol == ProtocolType::GRPC) {
-    // m_worker = std::make_unique<GrpcWorker>(config, &m_queue, statusHandler);
+    // m_pWorker = std::make_unique<GrpcWorker>(config, &m_queue, statusHandler);
     Logger::Log(Logger::ERROR, "gRPC Worker not implemented yet!");
   }
 
-  if (m_worker) {
-    m_worker->start();
+  if (m_pWorker) {
+    m_pWorker->start();
   }
 
   m_processingThread = std::thread(&ConnectionManager::processingLoop, this);
@@ -162,8 +162,8 @@ ConnectionManager::~ConnectionManager() {
     m_processingThread.join();
   }
 
-  if (m_worker) {
-    m_worker->stop();
+  if (m_pWorker) {
+    m_pWorker->stop();
   }
 }
 
@@ -215,17 +215,17 @@ void ConnectionManager::registerInternal(const std::string& key, MessageCallback
 }
 
 bool ConnectionManager::sendRawEnvelope(const broker::BrokerPayload& envelope) {
-  if (!m_worker) {
+  if (!m_pWorker) {
     return false;
   }
 
   std::string key = envelope.handler_key();
 
   if (Keys::isControlMessage(key)) {
-    return m_worker->writeControlMessage(envelope);
+    return m_pWorker->writeControlMessage(envelope);
   }
 
-  return m_worker->writeMessage(envelope);
+  return m_pWorker->writeMessage(envelope);
 }
 
 bool ConnectionManager::sendDataInternal(const std::string& key, const std::string_view& data) {

@@ -146,7 +146,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
       for (auto it = m_clients.begin(); it != m_clients.end();) {
         auto elapsed = now - it->second.lastSeen;
 
-        if (elapsed > CLIENT_TIMEOUT) {
+        if (elapsed > ClientTimeout) {
           auto nextIt = std::next(it);
           removeClient(it->first, "Timeout / Zombie");
           it = nextIt;  // Reset iterator safely after erasing
@@ -331,7 +331,7 @@ bool ZmqBroker::isDuplicate(const std::string& uuid) {
   m_seenMessageIds.insert(uuid);
   m_messageIdOrder.push_back(uuid);
 
-  if (m_messageIdOrder.size() > MAX_HISTORY_SIZE) {
+  if (m_messageIdOrder.size() > MaxHistorySize) {
     m_seenMessageIds.erase(m_messageIdOrder.front());
     m_messageIdOrder.pop_front();
   }

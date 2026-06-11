@@ -23,8 +23,9 @@ inline std::string generateHexDump(const std::string& rawData) {
       } else {
         hexDump << "   ";
       }
-      if (j == 7)
+      if (j == 7) {
         hexDump << " ";  // Center gap
+      }
     }
 
     hexDump << "  |";

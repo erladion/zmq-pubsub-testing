@@ -202,8 +202,9 @@ public:
     registerInternal(
         key,
         [callback](const std::string& /* ignored */) {
-          if (callback)
+          if (callback) {
             callback();
+          }
         },
         instance);
   }
@@ -277,7 +278,7 @@ private:
 
   std::string m_clientId;
 
-  std::unique_ptr<WorkerInterface> m_worker;
+  std::unique_ptr<WorkerInterface> m_pWorker;
 
   SafeQueue<broker::BrokerPayload> m_queue;
   std::thread m_processingThread;

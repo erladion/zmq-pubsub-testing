@@ -75,18 +75,25 @@ void printUsage() {
 BenchConfig parseArgs(int argc, char** argv) {
   BenchConfig config;
   auto intArg = [&](int& i) {
-    if (i + 1 >= argc) throw std::runtime_error(std::string("missing value for ") + argv[i]);
+    if (i + 1 >= argc) {
+      throw std::runtime_error(std::string("missing value for ") + argv[i]);
+    }
     return std::stoi(argv[++i]);
   };
 
   for (int i = 1; i < argc; ++i) {
     const std::string flag = argv[i];
-    if (flag == "--publishers") config.publisherCount = intArg(i);
-    else if (flag == "--subscribers") config.subscriberCount = intArg(i);
-    else if (flag == "--payload-bytes") config.payloadBytes = intArg(i);
-    else if (flag == "--warmup-secs") config.warmup = std::chrono::seconds(intArg(i));
-    else if (flag == "--duration-secs") config.duration = std::chrono::seconds(intArg(i));
-    else if (flag == "--help" || flag == "-h") {
+    if (flag == "--publishers") {
+      config.publisherCount = intArg(i);
+    } else if (flag == "--subscribers") {
+      config.subscriberCount = intArg(i);
+    } else if (flag == "--payload-bytes") {
+      config.payloadBytes = intArg(i);
+    } else if (flag == "--warmup-secs") {
+      config.warmup = std::chrono::seconds(intArg(i));
+    } else if (flag == "--duration-secs") {
+      config.duration = std::chrono::seconds(intArg(i));
+    } else if (flag == "--help" || flag == "-h") {
       printUsage();
       std::exit(0);
     } else {
@@ -238,7 +245,9 @@ SubscriberResult runSubscriber(SafeQueue<broker::BrokerPayload>& queue) {
 }
 
 double percentileMs(const std::vector<int64_t>& sortedNanos, double p) {
-  if (sortedNanos.empty()) return 0.0;
+  if (sortedNanos.empty()) {
+    return 0.0;
+  }
   const auto idx = static_cast<std::size_t>(p * static_cast<double>(sortedNanos.size() - 1));
   return static_cast<double>(sortedNanos[idx]) / 1e6;
 }
@@ -388,16 +397,26 @@ int main(int argc, char** argv) {
   std::this_thread::sleep_for(kDrainGrace);
 
   std::vector<PublisherResult> publisherResults;
-  for (auto& f : publisherFutures) publisherResults.push_back(f.get());
+  for (auto& f : publisherFutures) {
+    publisherResults.push_back(f.get());
+  }
 
-  for (auto& queue : inboundQueues) queue->stop();
+  for (auto& queue : inboundQueues) {
+    queue->stop();
+  }
   std::vector<SubscriberResult> subscriberResults;
-  for (auto& f : subscriberFutures) subscriberResults.push_back(f.get());
+  for (auto& f : subscriberFutures) {
+    subscriberResults.push_back(f.get());
+  }
 
   printReport(config, measureStart, measureEnd, publisherResults, subscriberResults);
 
-  for (auto& w : publishers) w->stop();
-  for (auto& w : subscribers) w->stop();
+  for (auto& w : publishers) {
+    w->stop();
+  }
+  for (auto& w : subscribers) {
+    w->stop();
+  }
   broker.stop();
   return 0;
 }

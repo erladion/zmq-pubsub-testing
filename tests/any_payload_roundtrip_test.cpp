@@ -57,9 +57,15 @@ protected:
   }
 
   void TearDown() override {
-    if (m_publisher) m_publisher->stop();
-    if (m_subscriber) m_subscriber->stop();
-    if (m_broker) m_broker->stop();
+    if (m_publisher) {
+      m_publisher->stop();
+    }
+    if (m_subscriber) {
+      m_subscriber->stop();
+    }
+    if (m_broker) {
+      m_broker->stop();
+    }
   }
 
   // The CONNECT/SUBSCRIBE control messages above are processed asynchronously

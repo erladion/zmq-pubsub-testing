@@ -23,8 +23,8 @@ struct ClientState {
 };
 
 class ZmqBroker {
-  const std::chrono::seconds CLIENT_TIMEOUT{10};
-  const size_t MAX_HISTORY_SIZE{10000};
+  const std::chrono::seconds ClientTimeout{10};
+  const size_t MaxHistorySize{10000};
 
 public:
   ZmqBroker();

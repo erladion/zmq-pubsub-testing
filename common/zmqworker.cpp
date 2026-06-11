@@ -7,7 +7,7 @@
 #include <iostream>
 
 ZmqWorker::ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, WorkerStatusCallback statusCb)
-    : m_config(config), m_inboundQueue(inboundQueue), m_statusCallback(statusCb), m_running(false), m_context(1), m_isOnline(false) {}
+    : m_config(config), m_pInboundQueue(inboundQueue), m_statusCallback(statusCb), m_running(false), m_context(1), m_isOnline(false) {}
 
 ZmqWorker::~ZmqWorker() {
   stop();
@@ -82,10 +82,10 @@ void ZmqWorker::run() {
         if (payload.ParseFromArray(msg.data(), msg.size())) {
           if (payload.handler_key() == Keys::HEARTBEAT_ACK) {
             // Liveness only - m_lastRxTime was already updated above
-          } else if (m_inboundQueue) {
+          } else if (m_pInboundQueue) {
             // Single timed attempt: if the consumer can't keep up, drop -
             // delivery is best-effort everywhere else in the stack too.
-            (void)m_inboundQueue->push(payload, std::chrono::milliseconds(100));
+            (void)m_pInboundQueue->push(payload, std::chrono::milliseconds(100));
           } else if (m_messageCallback) {
             m_messageCallback(payload);
           }

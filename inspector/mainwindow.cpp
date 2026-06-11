@@ -20,38 +20,38 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
   setupUi();
 
-  m_worker = new InspectorWorker(this);
-  connect(m_worker, &InspectorWorker::packetReceived, this, &MainWindow::onNewPacket, Qt::QueuedConnection);
+  m_pWorker = new InspectorWorker(this);
+  connect(m_pWorker, &InspectorWorker::packetReceived, this, &MainWindow::onNewPacket, Qt::QueuedConnection);
 
-  m_worker->start();
+  m_pWorker->start();
 
   ConnectionConfig config;
   config.address = "tcp://localhost:5555";
   config.clientId = "Inspector-Replay";
 
-  m_injector = new ZmqWorker(config, nullptr, nullptr);
-  m_injector->start();
+  m_pInjector = new ZmqWorker(config, nullptr, nullptr);
+  m_pInjector->start();
 }
 
 MainWindow::~MainWindow() {
-  m_worker->stopWorker();
-  m_worker->wait();
+  m_pWorker->stopWorker();
+  m_pWorker->wait();
 
-  m_injector->stop();
-  delete m_injector;
+  m_pInjector->stop();
+  delete m_pInjector;
 }
 
 void MainWindow::onNewPacket(const InspectorPacket& packet) {
-  QScrollBar* scrollBar = m_packetView->verticalScrollBar();
+  QScrollBar* scrollBar = m_pPacketView->verticalScrollBar();
   bool isAtBottom = (scrollBar->value() == scrollBar->maximum());
 
   m_packetHistory.push_back(packet);
-  m_tableModel->packetAdded();
+  m_pTableModel->packetAdded();
 
-  if (m_packetHistory.size() > MAX_PACKET_HISTORY) {
-    m_tableModel->packetsAboutToBeTrimmed(TRIM_CHUNK);
-    m_packetHistory.erase(m_packetHistory.begin(), m_packetHistory.begin() + TRIM_CHUNK);
-    m_tableModel->packetsTrimmed();
+  if (m_packetHistory.size() > MaxPacketHistory) {
+    m_pTableModel->packetsAboutToBeTrimmed(TrimChunk);
+    m_packetHistory.erase(m_packetHistory.begin(), m_packetHistory.begin() + TrimChunk);
+    m_pTableModel->packetsTrimmed();
   }
 
   QString qTopic = QString::fromStdString(packet.topic);
@@ -64,44 +64,44 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
     QAction* action = new QAction(qTopic, this);
     action->setCheckable(true);
     action->setChecked(true);
-    m_topicMenu->addAction(action);
+    m_pTopicMenu->addAction(action);
     connect(action, &QAction::toggled, this, &MainWindow::applyFilters);
     applyFilters();  // Update if a new topic appears
   }
 
   if (isAtBottom) {
-    m_packetView->scrollToBottom();
+    m_pPacketView->scrollToBottom();
   }
 
   if (packet.topic == Keys::SYS_STATS) {
     broker::SystemStats statsMsg;
 
     if (packet.parsedProto.payload().UnpackTo(&statsMsg)) {
-      m_brokerIdLabel->setText(QString("Broker ID: %1").arg(QString::fromStdString(statsMsg.broker_id())));
-      m_uptimeLabel->setText(QString("Uptime: %1 s").arg(statsMsg.uptime_sec()));
+      m_pBrokerIdLabel->setText(QString("Broker ID: %1").arg(QString::fromStdString(statsMsg.broker_id())));
+      m_pUptimeLabel->setText(QString("Uptime: %1 s").arg(statsMsg.uptime_sec()));
 
-      m_clientsLabel->setText(QString("Clients: %1").arg(statsMsg.clients_count()));
-      m_peersLabel->setText(QString("Peers: %1").arg(statsMsg.peers_count()));
+      m_pClientsLabel->setText(QString("Clients: %1").arg(statsMsg.clients_count()));
+      m_pPeersLabel->setText(QString("Peers: %1").arg(statsMsg.peers_count()));
 
-      m_msgsSecLabel->setText(QString("Msgs/sec: %1").arg(statsMsg.msgs_per_sec()));
-      m_kbSecLabel->setText(QString("KB/sec: %1").arg(statsMsg.kb_per_sec(), 0, 'f', 2));
-      m_totalMsgsLabel->setText(QString("Total Msgs: %1").arg(statsMsg.total_msgs()));
+      m_pMsgsSecLabel->setText(QString("Msgs/sec: %1").arg(statsMsg.msgs_per_sec()));
+      m_pKbSecLabel->setText(QString("KB/sec: %1").arg(statsMsg.kb_per_sec(), 0, 'f', 2));
+      m_pTotalMsgsLabel->setText(QString("Total Msgs: %1").arg(statsMsg.total_msgs()));
     }
   }
 }
 
 void MainWindow::onSelectionChanged() {
-  QModelIndexList selected = m_packetView->selectionModel()->selectedRows();
+  QModelIndexList selected = m_pPacketView->selectionModel()->selectedRows();
   if (selected.isEmpty()) {
     return;
   }
 
-  int row = m_proxyModel->mapToSource(selected.first()).row();
+  int row = m_pProxyModel->mapToSource(selected.first()).row();
 
   const InspectorPacket& packet = m_packetHistory[row];
-  m_hexDump->setPlainText(QString::fromStdString(HexUtils::generateHexDump(packet.rawMemory)));
-  m_protoTree->clear();
-  ProtoUtils::drawEnvelopeAndPayload(packet.parsedProto, m_protoTree);
+  m_pHexDump->setPlainText(QString::fromStdString(HexUtils::generateHexDump(packet.rawMemory)));
+  m_pProtoTree->clear();
+  ProtoUtils::drawEnvelopeAndPayload(packet.parsedProto, m_pProtoTree);
 }
 
 void MainWindow::setupUi() {
@@ -111,29 +111,29 @@ void MainWindow::setupUi() {
 
   QHBoxLayout* topBarLayout = new QHBoxLayout();
 
-  m_filterBar = new QLineEdit(this);
-  m_filterBar->setPlaceholderText("Filter by Topic, Key, or Sender...");
-  m_filterBar->setClearButtonEnabled(true);
+  m_pFilterBar = new QLineEdit(this);
+  m_pFilterBar->setPlaceholderText("Filter by Topic, Key, or Sender...");
+  m_pFilterBar->setClearButtonEnabled(true);
 
-  connect(m_filterBar, &QLineEdit::textChanged, this, &MainWindow::applyFilters);
+  connect(m_pFilterBar, &QLineEdit::textChanged, this, &MainWindow::applyFilters);
 
-  m_topicFilterButton = new QPushButton("Topic Filters", this);
-  m_topicMenu = new QMenu(this);
-  m_topicFilterButton->setMenu(m_topicMenu);
+  m_pTopicFilterButton = new QPushButton("Topic Filters", this);
+  m_pTopicMenu = new QMenu(this);
+  m_pTopicFilterButton->setMenu(m_pTopicMenu);
 
-  topBarLayout->addWidget(m_filterBar);
-  topBarLayout->addWidget(m_topicFilterButton);
+  topBarLayout->addWidget(m_pFilterBar);
+  topBarLayout->addWidget(m_pTopicFilterButton);
 
   QSplitter* mainSplitter = new QSplitter(Qt::Vertical, this);
 
-  m_packetView = new QTableView(this);
-  m_tableModel = new PacketTableModel(m_packetHistory, this);
-  m_proxyModel = new PacketFilterProxyModel(this);
+  m_pPacketView = new QTableView(this);
+  m_pTableModel = new PacketTableModel(m_packetHistory, this);
+  m_pProxyModel = new PacketFilterProxyModel(this);
 
-  m_proxyModel->setSourceModel(m_tableModel);
-  m_packetView->setModel(m_proxyModel);
+  m_pProxyModel->setSourceModel(m_pTableModel);
+  m_pPacketView->setModel(m_pProxyModel);
 
-  QHeaderView* header = m_packetView->horizontalHeader();
+  QHeaderView* header = m_pPacketView->horizontalHeader();
   header->setSectionResizeMode(0, QHeaderView::ResizeToContents);  // Time
   header->setSectionResizeMode(1, QHeaderView::Stretch);           // Sender
   header->setSectionResizeMode(2, QHeaderView::ResizeToContents);  // Key
@@ -142,23 +142,23 @@ void MainWindow::setupUi() {
   header->setSectionResizeMode(5, QHeaderView::ResizeToContents);  // Payload Size
   header->setStretchLastSection(false);
 
-  m_packetView->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_packetView->setSelectionMode(QAbstractItemView::SingleSelection);
-  connect(m_packetView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MainWindow::onSelectionChanged);
+  m_pPacketView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_pPacketView->setSelectionMode(QAbstractItemView::SingleSelection);
+  connect(m_pPacketView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MainWindow::onSelectionChanged);
 
-  m_packetView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(m_packetView, &QTableView::customContextMenuRequested, this, &MainWindow::showContextMenu);
+  m_pPacketView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_pPacketView, &QTableView::customContextMenuRequested, this, &MainWindow::showContextMenu);
 
-  m_protoTree = new QTreeWidget(this);
-  m_protoTree->setHeaderLabels({"Field", "Value"});
+  m_pProtoTree = new QTreeWidget(this);
+  m_pProtoTree->setHeaderLabels({"Field", "Value"});
 
-  m_hexDump = new QTextEdit(this);
-  m_hexDump->setFontFamily("Monospace");
-  m_hexDump->setReadOnly(true);
+  m_pHexDump = new QTextEdit(this);
+  m_pHexDump->setFontFamily("Monospace");
+  m_pHexDump->setReadOnly(true);
 
-  mainSplitter->addWidget(m_packetView);
-  mainSplitter->addWidget(m_protoTree);
-  mainSplitter->addWidget(m_hexDump);
+  mainSplitter->addWidget(m_pPacketView);
+  mainSplitter->addWidget(m_pProtoTree);
+  mainSplitter->addWidget(m_pHexDump);
 
   mainLayout->addLayout(topBarLayout);
   mainLayout->addWidget(mainSplitter);
@@ -170,64 +170,65 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::setupSysStatsView() {
-  m_statsDock = new QDockWidget("Live System Stats", this);
+  m_pStatsDock = new QDockWidget("Live System Stats", this);
 
-  m_statsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+  m_pStatsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
   QWidget* dockContent = new QWidget();
   QVBoxLayout* layout = new QVBoxLayout(dockContent);
 
-  m_brokerIdLabel = new QLabel("Broker ID: --");
-  m_brokerIdLabel->setWordWrap(true);
-  m_brokerIdLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-  m_uptimeLabel = new QLabel("Uptime: -- s");
-  m_clientsLabel = new QLabel("Clients: 0");
-  m_peersLabel = new QLabel("Peers: 0");
-  m_msgsSecLabel = new QLabel("Msgs/sec: 0");
-  m_kbSecLabel = new QLabel("KB/sec: 0.00");
-  m_totalMsgsLabel = new QLabel("Total Msgs: 0");
+  m_pBrokerIdLabel = new QLabel("Broker ID: --");
+  m_pBrokerIdLabel->setWordWrap(true);
+  m_pBrokerIdLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  m_pUptimeLabel = new QLabel("Uptime: -- s");
+  m_pClientsLabel = new QLabel("Clients: 0");
+  m_pPeersLabel = new QLabel("Peers: 0");
+  m_pMsgsSecLabel = new QLabel("Msgs/sec: 0");
+  m_pKbSecLabel = new QLabel("KB/sec: 0.00");
+  m_pTotalMsgsLabel = new QLabel("Total Msgs: 0");
 
   QFont boldFont("Monospace", 10, QFont::Bold);
-  m_brokerIdLabel->setFont(boldFont);
+  m_pBrokerIdLabel->setFont(boldFont);
 
-  m_msgsSecLabel->setStyleSheet("color: #2ecc71; font-weight: bold;");  // Green
+  m_pMsgsSecLabel->setStyleSheet("color: #2ecc71; font-weight: bold;");  // Green
 
-  layout->addWidget(m_brokerIdLabel);
-  layout->addWidget(m_uptimeLabel);
+  layout->addWidget(m_pBrokerIdLabel);
+  layout->addWidget(m_pUptimeLabel);
 
   QFrame* line1 = new QFrame();
   line1->setFrameShape(QFrame::HLine);
   layout->addWidget(line1);
 
-  layout->addWidget(m_clientsLabel);
-  layout->addWidget(m_peersLabel);
+  layout->addWidget(m_pClientsLabel);
+  layout->addWidget(m_pPeersLabel);
 
   QFrame* line2 = new QFrame();
   line2->setFrameShape(QFrame::HLine);
   layout->addWidget(line2);
 
-  layout->addWidget(m_msgsSecLabel);
-  layout->addWidget(m_kbSecLabel);
-  layout->addWidget(m_totalMsgsLabel);
+  layout->addWidget(m_pMsgsSecLabel);
+  layout->addWidget(m_pKbSecLabel);
+  layout->addWidget(m_pTotalMsgsLabel);
 
   layout->addStretch();
 
-  m_statsDock->setWidget(dockContent);
-  addDockWidget(Qt::RightDockWidgetArea, m_statsDock);
+  m_pStatsDock->setWidget(dockContent);
+  addDockWidget(Qt::RightDockWidgetArea, m_pStatsDock);
 }
 
 void MainWindow::applyFilters() {
   QSet<QString> allowedTopics;
-  for (QAction* action : m_topicMenu->actions()) {
-    if (action->isChecked())
+  for (QAction* action : m_pTopicMenu->actions()) {
+    if (action->isChecked()) {
       allowedTopics.insert(action->text());
+    }
   }
 
-  m_proxyModel->updateFilters(m_filterBar->text(), allowedTopics);
+  m_pProxyModel->updateFilters(m_pFilterBar->text(), allowedTopics);
 }
 
 void MainWindow::showContextMenu(const QPoint& pos) {
-  QModelIndexList selectedRows = m_packetView->selectionModel()->selectedRows();
+  QModelIndexList selectedRows = m_pPacketView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty()) {
     return;
   }
@@ -237,16 +238,16 @@ void MainWindow::showContextMenu(const QPoint& pos) {
 
   connect(replayAction, &QAction::triggered, this, &MainWindow::replaySelectedMessage);
 
-  menu.exec(m_packetView->viewport()->mapToGlobal(pos));
+  menu.exec(m_pPacketView->viewport()->mapToGlobal(pos));
 }
 
 void MainWindow::replaySelectedMessage() {
-  QModelIndexList selectedRows = m_packetView->selectionModel()->selectedRows();
+  QModelIndexList selectedRows = m_pPacketView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty()) {
     return;
   }
 
-  int row = m_proxyModel->mapToSource(selectedRows.first()).row();
+  int row = m_pProxyModel->mapToSource(selectedRows.first()).row();
 
   if (row >= m_packetHistory.size() || row < 0) {
     return;
@@ -262,9 +263,9 @@ void MainWindow::replaySelectedMessage() {
   }
 
   if (Keys::isControlMessage(replayedMsg.handler_key())) {
-    m_injector->writeControlMessage(replayedMsg);
+    m_pInjector->writeControlMessage(replayedMsg);
   } else {
-    m_injector->writeMessage(replayedMsg);
+    m_pInjector->writeMessage(replayedMsg);
   }
 
   Logger::Log(Logger::INFO, "Injected replay for topic: " + replayedMsg.topic());

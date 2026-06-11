@@ -31,7 +31,7 @@ private:
 
 private:
   ConnectionConfig m_config;
-  SafeQueue<broker::BrokerPayload>* m_inboundQueue;
+  SafeQueue<broker::BrokerPayload>* m_pInboundQueue;
   WorkerStatusCallback m_statusCallback;
   WorkerMessageCallback m_messageCallback;
 

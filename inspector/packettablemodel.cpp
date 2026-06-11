@@ -34,15 +34,17 @@ void PacketTableModel::packetsTrimmed() {
 }
 
 QVariant PacketTableModel::headerData(int section, Qt::Orientation orientation, int role) const {
-  if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
+  if (role != Qt::DisplayRole || orientation != Qt::Horizontal) {
     return QVariant();
+  }
   const char* headers[] = {"Time", "Sender", "Key", "Topic", "Msg size", "Payload size"};
   return headers[section];
 }
 
 QVariant PacketTableModel::data(const QModelIndex& index, int role) const {
-  if (!index.isValid() || index.row() >= m_history.size())
+  if (!index.isValid() || index.row() >= m_history.size()) {
     return QVariant();
+  }
 
   const InspectorPacket& packet = m_history[index.row()];
 

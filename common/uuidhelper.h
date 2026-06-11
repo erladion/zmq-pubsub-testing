@@ -1,13 +1,26 @@
 #ifndef UUIDHELPER_H
 #define UUIDHELPER_H
 
+#include <chrono>
+#include <functional>
 #include <random>
 #include <string>
+#include <thread>
 
 inline std::string generateUUID() {
   static const char hex_chars[] = "0123456789abcdef";
-  thread_local std::random_device rd;
-  thread_local std::mt19937 gen(rd());
+  // Seeding mt19937 from a single 32-bit draw would allow only 2^32 possible
+  // UUID streams: two processes drawing the same seed emit identical UUID
+  // sequences, and the broker dedup then silently drops one side's messages
+  // as "already seen". Seed from several entropy words plus per-process and
+  // per-thread salt so streams can't coincide.
+  thread_local std::mt19937 gen = [] {
+    std::random_device rd;
+    const auto now = static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count());
+    const auto tid = static_cast<unsigned int>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+    std::seed_seq seq{rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd(), now, tid};
+    return std::mt19937(seq);
+  }();
   thread_local std::uniform_int_distribution<> dis(0, 15);
   thread_local std::uniform_int_distribution<> dis2(8, 11);
 

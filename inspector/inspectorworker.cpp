@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <sstream>
 
+#include "config.h"
+
 std::string getCurrentTimestamp() {
   auto now = std::chrono::system_clock::now();
   auto in_time_t = std::chrono::system_clock::to_time_t(now);
@@ -21,6 +23,7 @@ void InspectorWorker::run() {
   m_running = true;
   zmq::context_t ctx(1);
   zmq::socket_t inspector(ctx, ZMQ_SUB);
+  inspector.set(zmq::sockopt::maxmsgsize, MAX_MESSAGE_SIZE_BYTES);
   inspector.connect("ipc:///tmp/broker_inspector.sock");
   inspector.set(zmq::sockopt::subscribe, "");
 

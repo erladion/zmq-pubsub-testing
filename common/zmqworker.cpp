@@ -41,6 +41,7 @@ void ZmqWorker::run() {
   zmq::socket_t socket(m_context, ZMQ_DEALER);
   socket.set(zmq::sockopt::linger, 0);
   socket.set(zmq::sockopt::routing_id, m_config.clientId);
+  socket.set(zmq::sockopt::maxmsgsize, MAX_MESSAGE_SIZE_BYTES);
   socket.connect(m_config.address);
 
   const auto HEARTBEAT_INTERVAL = std::chrono::seconds(3);

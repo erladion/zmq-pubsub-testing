@@ -52,6 +52,7 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
   zmq::socket_t socket(m_context, ZMQ_ROUTER);
   socket.set(zmq::sockopt::linger, 0);
   socket.set(zmq::sockopt::router_mandatory, 1);
+  socket.set(zmq::sockopt::maxmsgsize, MAX_MESSAGE_SIZE_BYTES);
 
   zmq::socket_t inspectorSocket(m_context, ZMQ_PUB);
   inspectorSocket.set(zmq::sockopt::linger, 0);

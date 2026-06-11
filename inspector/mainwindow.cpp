@@ -48,6 +48,12 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
   m_packetHistory.push_back(packet);
   m_tableModel->packetAdded();
 
+  if (m_packetHistory.size() > MAX_PACKET_HISTORY) {
+    m_tableModel->packetsAboutToBeTrimmed(TRIM_CHUNK);
+    m_packetHistory.erase(m_packetHistory.begin(), m_packetHistory.begin() + TRIM_CHUNK);
+    m_tableModel->packetsTrimmed();
+  }
+
   QString qTopic = QString::fromStdString(packet.topic);
   if (qTopic.isEmpty()) {
     qTopic = "[Empty]";

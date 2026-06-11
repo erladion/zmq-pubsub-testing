@@ -25,6 +25,14 @@ void PacketTableModel::packetAdded() {
   endInsertRows();
 }
 
+void PacketTableModel::packetsAboutToBeTrimmed(int count) {
+  beginRemoveRows(QModelIndex(), 0, count - 1);
+}
+
+void PacketTableModel::packetsTrimmed() {
+  endRemoveRows();
+}
+
 QVariant PacketTableModel::headerData(int section, Qt::Orientation orientation, int role) const {
   if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
     return QVariant();

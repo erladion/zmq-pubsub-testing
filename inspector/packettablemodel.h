@@ -16,6 +16,14 @@ public:
   QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
   void packetAdded();  // Call this when vector size increases
+
+  // Bracket the removal of the oldest `count` packets: call
+  // packetsAboutToBeTrimmed(), erase from the front of the history vector,
+  // then packetsTrimmed(). Qt requires the begin/end pair to surround the
+  // actual mutation.
+  void packetsAboutToBeTrimmed(int count);
+  void packetsTrimmed();
+
 private:
   const std::vector<InspectorPacket>& m_history;
 };

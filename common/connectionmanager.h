@@ -136,11 +136,10 @@ bool decodePayload(const std::string& raw, T& out) {
 
 }  // namespace detail
 
-class ConnectionManager : public std::enable_shared_from_this<ConnectionManager> {
+class ConnectionManager {
 public:
   static void init(const ConnectionConfig& config);
   static void shutdown();
-  static ConnectionManager& instance();
 
   static bool sendMessage(const std::string& key, const std::string& message);
   static bool sendData(const std::string& key, const std::string_view& data);
@@ -287,8 +286,6 @@ private:
 
   std::mutex m_mapMutex;
   std::map<std::string, std::vector<CallbackEntry>> m_msgHandlers;
-
-  std::chrono::steady_clock::time_point m_lastConnectionTime;
 
   static std::vector<std::tuple<std::string, MessageCallback, void*>> s_pendingMsgCallbacks;
 };

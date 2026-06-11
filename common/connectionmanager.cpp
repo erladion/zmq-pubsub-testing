@@ -61,15 +61,6 @@ void ConnectionManager::shutdown() {
   }
 }
 
-ConnectionManager& ConnectionManager::instance() {
-  if (m_instance == nullptr) {
-    Logger::Log(Logger::ERROR, "ConnectionManager::instance() called before init()!");
-    throw std::runtime_error("ConnectionManager not initialized");
-  }
-
-  return *m_instance;
-}
-
 std::shared_ptr<ConnectionManager> ConnectionManager::getInstance() {
   std::lock_guard<std::mutex> lock(m_initMutex);
   return m_instance;
@@ -138,10 +129,6 @@ ConnectionManager::ConnectionManager(const ConnectionConfig& config) : m_clientI
     Logger::Log(Logger::INFO, std::string("Status: ") + (connected ? "ONLINE" : "OFFLINE"));
 
     m_connected = connected;
-
-    if (connected) {
-      m_lastConnectionTime = std::chrono::steady_clock::now();
-    }
 
     if (connected) {
       sendRawEnvelope(createControlEnvelope(Keys::CONNECT, ""));
@@ -282,12 +269,9 @@ void ConnectionManager::processingLoop() {
     std::string key = msg.handler_key();
 
     if (key == Keys::RESET) {
-      auto now = std::chrono::steady_clock::now();
-      auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - m_lastConnectionTime).count();
-
-      if (elapsed > 2) {
-        resubscribeAll();
-      }
+      // Re-subscribing is idempotent broker-side, so always answer a RESET -
+      // a time-based guard here risks silently dropping a legitimate one.
+      resubscribeAll();
     } else {
       handleMessage(msg);
     }

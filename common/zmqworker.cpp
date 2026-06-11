@@ -39,7 +39,9 @@ void ZmqWorker::setMessageCallback(WorkerMessageCallback callback) {
 
 void ZmqWorker::run() {
   zmq::socket_t socket(m_context, ZMQ_DEALER);
-  socket.set(zmq::sockopt::linger, 0);
+  // Small linger so the shutdown drain below can reach the wire; bounded so
+  // a dead broker can't stall close() for long.
+  socket.set(zmq::sockopt::linger, 100);
   socket.set(zmq::sockopt::routing_id, m_config.clientId);
   socket.set(zmq::sockopt::maxmsgsize, MAX_MESSAGE_SIZE_BYTES);
   socket.connect(m_config.address);
@@ -79,20 +81,11 @@ void ZmqWorker::run() {
         payload.Clear();
         if (payload.ParseFromArray(msg.data(), msg.size())) {
           if (payload.handler_key() == Keys::HEARTBEAT_ACK) {
+            // Liveness only - m_lastRxTime was already updated above
           } else if (m_inboundQueue) {
-            bool pushed = false;
-            while (!pushed && m_running) {
-              if (m_inboundQueue->push(payload, std::chrono::milliseconds(100))) {
-                pushed = true;
-              } else {
-                auto now = std::chrono::steady_clock::now();
-                if (now - lastHeartbeat > HEARTBEAT_INTERVAL) {
-                  sendHeartbeat(socket);
-                  lastHeartbeat = now;
-                }
-              }
-            }
-
+            // Single timed attempt: if the consumer can't keep up, drop -
+            // delivery is best-effort everywhere else in the stack too.
+            (void)m_inboundQueue->push(payload, std::chrono::milliseconds(100));
           } else if (m_messageCallback) {
             m_messageCallback(payload);
           }
@@ -132,6 +125,15 @@ void ZmqWorker::run() {
         m_statusCallback(false);
       }
     }
+  }
+
+  // Final drain so control messages queued during shutdown (DISCONNECT from
+  // ConnectionManager::shutdown()) are sent before the socket closes; without
+  // it the broker only notices the disconnect via its zombie timeout.
+  payload.Clear();
+  while (m_controlQueue.try_pop(payload)) {
+    zmq::message_t msg = createZmqMsg(payload);
+    (void)socket.send(msg, zmq::send_flags::dontwait);
   }
 
   socket.close();

@@ -13,6 +13,29 @@
 #include <google/protobuf/arena.h>
 #include <google/protobuf/stubs/common.h>
 
+namespace {
+
+// Two-frame ROUTER send (identity + payload), non-blocking: a slow client
+// with a full pipe must stall its own messages, not the broker loop (a
+// blocked send here would also make stop() hang). The payload frame is only
+// sent if the identity frame was accepted - zmq never rejects continuation
+// frames of a multipart message, so the pair can't be torn apart.
+void sendToClient(zmq::socket_t& socket, const std::string& clientId, zmq::message_t& data) {
+  zmq::message_t outId(clientId.data(), clientId.size());
+  zmq::message_t dataCopy;
+  dataCopy.copy(data);
+
+  try {
+    if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
+      (void)socket.send(dataCopy, zmq::send_flags::dontwait);
+    }
+  } catch (const zmq::error_t&) {
+    // Unroutable client (router_mandatory) - the zombie cleanup handles it.
+  }
+}
+
+}  // namespace
+
 ZmqBroker::ZmqBroker() : m_running(false), m_context(1), m_brokerId(generateUUID()) {}
 
 ZmqBroker::~ZmqBroker() {
@@ -169,24 +192,12 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     if (newClient) {
       Logger::Log(Logger::INFO, "New client: " + senderId + ". Requesting Subscription Reset");
 
-      zmq::message_t outId(senderId.data(), senderId.size());
-
       broker::BrokerPayload resetMsg;
       resetMsg.set_handler_key(Keys::RESET.data(), Keys::RESET.size());
       resetMsg.set_topic("");
 
       zmq::message_t outData = createZmqMsg(resetMsg);
-      // All ROUTER sends use dontwait: a slow client with a full pipe must
-      // stall its own messages, not the broker loop (a blocked send here also
-      // makes stop() hang). The payload frame is only sent if the identity
-      // frame was accepted - zmq never rejects continuation frames of a
-      // multipart message, so the pair can't be torn apart.
-      try {
-        if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
-          (void)socket.send(outData, zmq::send_flags::dontwait);
-        }
-      } catch (...) {
-      }  // Ignore send errors on new clients
+      sendToClient(socket, senderId, outData);
 
       return;  // Don't broadcast RESET requests
     }
@@ -194,19 +205,12 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     if (key == Keys::CONNECT || key == Keys::HEARTBEAT) {
       // Just keep-alive, already handled by updating 'lastSeen' above
       if (key == Keys::HEARTBEAT) {
-        zmq::message_t outId(senderId.data(), senderId.size());
-
         broker::BrokerPayload ack;
         ack.set_handler_key(Keys::HEARTBEAT_ACK);
         ack.set_topic("");
 
         zmq::message_t outData = createZmqMsg(ack);
-        try {
-          if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
-            (void)socket.send(outData, zmq::send_flags::dontwait);
-          }
-        } catch (...) {
-        }
+        sendToClient(socket, senderId, outData);
       }
       return;
     }
@@ -289,18 +293,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
           return;
         }
 
-        zmq::message_t outId(id.data(), id.size());
-
-        zmq::message_t msgCopy;
-        msgCopy.copy(outData);
-
-        try {
-          if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
-            (void)socket.send(msgCopy, zmq::send_flags::dontwait);
-          }
-        } catch (const zmq::error_t&) {
-          // Client likely disconnected, will be picked up by Zombie killer
-        }
+        sendToClient(socket, id, outData);
       };
 
       if (exactSubs) {
@@ -386,16 +379,7 @@ void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSo
 
   if (m_topicSubscribers.count(sysStatsKey)) {
     for (const auto& id : m_topicSubscribers[sysStatsKey]) {
-      zmq::message_t outId(id.data(), id.size());
-      zmq::message_t msgCopy;
-      msgCopy.copy(msg);
-
-      try {
-        if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
-          (void)socket.send(msgCopy, zmq::send_flags::dontwait);
-        }
-      } catch (...) {
-      }
+      sendToClient(socket, id, msg);
     }
   }
 }

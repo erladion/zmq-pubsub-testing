@@ -10,6 +10,7 @@
 #include "messagekeys.h"
 #include "safequeue.h"
 #include "uuidhelper.h"
+#include "wireframe.h"
 #include "zmqbroker.h"
 #include "zmqworker.h"
 
@@ -29,8 +30,8 @@ const std::string kRequestTopic = "request-reply-test";
 // ConnectionManager can't play both ends of a request/reply round trip with
 // itself - its own request would never reach its own handler. Each test below
 // instead pairs a ConnectionManager (exercising the API under test) with a
-// raw ZmqWorker standing in for "the other side", built straight from
-// BrokerPayload like the broker itself expects.
+// raw ZmqWorker standing in for "the other side", built straight from an
+// Envelope like the broker itself expects.
 }  // namespace
 
 class RequestReplyTest : public ::testing::Test {
@@ -52,7 +53,7 @@ protected:
 
 // replyToSender() is the new piece of API: a handler running on a
 // ConnectionManager receives a request carrying a reply_topic and replies
-// straight back to it without ever seeing a BrokerPayload. The "requester"
+// straight back to it without ever seeing an Envelope. The "requester"
 // here is a raw ZmqWorker that addresses its request the same way
 // ConnectionManager::sendRequest() does, then waits on the reply topic for
 // whatever replyToSender() sends back.
@@ -62,7 +63,7 @@ TEST_F(RequestReplyTest, ReplyToSenderAddressesResponseBackToReplyTopic) {
   const std::string replyTopic = kRequestTopic + "-reply-" + generateUUID();
   const std::string requesterId = "raw-requester";
 
-  SafeQueue<broker::BrokerPayload> inbound;
+  SafeQueue<Envelope> inbound;
   ConnectionConfig requesterConfig;
   requesterConfig.address = testBrokerAddress();
   requesterConfig.clientId = requesterId;
@@ -84,25 +85,25 @@ TEST_F(RequestReplyTest, ReplyToSenderAddressesResponseBackToReplyTopic) {
   // Re-send the request until a reply comes back: registerCallback()'s
   // SUBSCRIBE is processed asynchronously by the broker, so the very first
   // attempt can race a not-yet-active subscription and be dropped silently.
-  broker::BrokerPayload received;
+  Envelope received;
   bool gotReply = false;
   for (int attempt = 0; attempt < 30 && !gotReply; ++attempt) {
-    broker::BrokerPayload request;
-    request.set_handler_key(kRequestTopic);
-    request.set_sender_id(requesterId);
-    request.set_topic(kRequestTopic);
-    request.set_raw_data("ping");
-    request.set_reply_topic(replyTopic);
+    Envelope request;
+    request.header.set_handler_key(kRequestTopic);
+    request.header.set_sender_id(requesterId);
+    request.header.set_topic(kRequestTopic);
+    request.header.set_reply_topic(replyTopic);
+    request.payload = "ping";
     requester.writeMessage(request);
 
-    if (popWithTimeout(inbound, received, 300ms) && received.topic() == replyTopic) {
+    if (popWithTimeout(inbound, received, 300ms) && received.header.topic() == replyTopic) {
       gotReply = true;
     }
   }
 
   ASSERT_TRUE(gotReply) << "Never received a reply on " << replyTopic << " - replyToSender() didn't address it back correctly";
-  EXPECT_EQ(received.raw_data(), "pong");
-  EXPECT_EQ(received.sender_id(), "reply-to-sender-responder");
+  EXPECT_EQ(received.payload, "pong");
+  EXPECT_EQ(received.header.sender_id(), "reply-to-sender-responder");
 
   requester.stop();
 }
@@ -117,7 +118,7 @@ TEST_F(RequestReplyTest, SendRequestReceivesReplyAddressedByReplyTopic) {
 
   const std::string responderId = "raw-responder";
 
-  SafeQueue<broker::BrokerPayload> inbound;
+  SafeQueue<Envelope> inbound;
   ConnectionConfig responderConfig;
   responderConfig.address = testBrokerAddress();
   responderConfig.clientId = responderId;
@@ -136,17 +137,17 @@ TEST_F(RequestReplyTest, SendRequestReceivesReplyAddressedByReplyTopic) {
   // on the foreground thread.
   std::atomic<bool> keepResponding{true};
   std::thread responderThread([&]() {
-    broker::BrokerPayload request;
+    Envelope request;
     while (keepResponding) {
-      if (popWithTimeout(inbound, request, 100ms) && request.handler_key() == kRequestTopic) {
-        EXPECT_EQ(request.raw_data(), "ping");
-        ASSERT_FALSE(request.reply_topic().empty()) << "sendRequest() didn't stamp reply_topic onto the request envelope";
+      if (popWithTimeout(inbound, request, 100ms) && request.header.handler_key() == kRequestTopic) {
+        EXPECT_EQ(request.payload, "ping");
+        ASSERT_FALSE(request.header.reply_topic().empty()) << "sendRequest() didn't stamp reply_topic onto the request envelope";
 
-        broker::BrokerPayload reply;
-        reply.set_handler_key(request.reply_topic());
-        reply.set_sender_id(responderId);
-        reply.set_topic(request.reply_topic());
-        reply.set_raw_data("pong");
+        Envelope reply;
+        reply.header.set_handler_key(request.header.reply_topic());
+        reply.header.set_sender_id(responderId);
+        reply.header.set_topic(request.header.reply_topic());
+        reply.payload = "pong";
         responder.writeMessage(reply);
       }
     }

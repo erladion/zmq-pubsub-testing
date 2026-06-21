@@ -48,10 +48,10 @@ void ConnectionManager::shutdown() {
       m_instance->m_running = false;
 
       if (m_instance->m_connected && m_instance->m_pWorker) {
-        broker::BrokerPayload byeMsg;
-        byeMsg.set_handler_key(Keys::DISCONNECT);
-        byeMsg.set_sender_id(m_instance->m_clientId);
-        byeMsg.set_topic("");
+        Envelope byeMsg;
+        byeMsg.header.set_handler_key(Keys::DISCONNECT);
+        byeMsg.header.set_sender_id(m_instance->m_clientId);
+        byeMsg.header.set_topic("");
         m_instance->m_pWorker->writeControlMessage(byeMsg);
       }
 
@@ -101,12 +101,12 @@ bool ConnectionManager::sendRequest(const std::string& requestTopic, const std::
       },
       tempInstanceKey);
 
-  broker::BrokerPayload request;
-  request.set_handler_key(requestTopic);
-  request.set_sender_id(self->m_clientId);
-  request.set_topic(requestTopic);
-  request.set_raw_data(payload);
-  request.set_reply_topic(replyTopic);
+  Envelope request;
+  request.header.set_handler_key(requestTopic);
+  request.header.set_sender_id(self->m_clientId);
+  request.header.set_topic(requestTopic);
+  request.header.set_reply_topic(replyTopic);
+  request.payload = payload;
   self->sendRawEnvelope(request);
 
   bool success = false;
@@ -214,14 +214,12 @@ void ConnectionManager::registerInternal(const std::string& key, MessageCallback
   }
 }
 
-bool ConnectionManager::sendRawEnvelope(const broker::BrokerPayload& envelope) {
+bool ConnectionManager::sendRawEnvelope(const Envelope& envelope) {
   if (!m_pWorker) {
     return false;
   }
 
-  std::string key = envelope.handler_key();
-
-  if (Keys::isControlMessage(key)) {
+  if (Keys::isControlMessage(envelope.header.handler_key())) {
     return m_pWorker->writeControlMessage(envelope);
   }
 
@@ -229,11 +227,11 @@ bool ConnectionManager::sendRawEnvelope(const broker::BrokerPayload& envelope) {
 }
 
 bool ConnectionManager::sendDataInternal(const std::string& key, const std::string_view& data) {
-  broker::BrokerPayload msg;
-  msg.set_handler_key(key);
-  msg.set_sender_id(m_clientId);
-  msg.set_topic(key);
-  msg.set_raw_data(data.data(), data.size());
+  Envelope msg;
+  msg.header.set_handler_key(key);
+  msg.header.set_sender_id(m_clientId);
+  msg.header.set_topic(key);
+  msg.payload.assign(data.data(), data.size());
   return sendRawEnvelope(msg);
 }
 
@@ -242,44 +240,42 @@ bool ConnectionManager::replyToSender(const std::string& data) {
   if (self == nullptr) {
     return false;
   }
-  broker::BrokerPayload reply;
-  detail::encodePayload(reply, data);
+  Envelope reply;
+  reply.payload = detail::encodePayload(data);
   return self->sendReplyEnvelope(reply);
 }
 
-bool ConnectionManager::sendReplyEnvelope(broker::BrokerPayload& reply) {
+bool ConnectionManager::sendReplyEnvelope(Envelope& reply) {
   if (t_currentReplyTopic.empty()) {
     Logger::Log(Logger::WARNING, "replyToSender() called outside of a request context - nothing to reply to.");
     return false;
   }
 
-  reply.set_handler_key(t_currentReplyTopic);
-  reply.set_sender_id(m_clientId);
-  reply.set_topic(t_currentReplyTopic);
+  reply.header.set_handler_key(t_currentReplyTopic);
+  reply.header.set_sender_id(m_clientId);
+  reply.header.set_topic(t_currentReplyTopic);
   return sendRawEnvelope(reply);
 }
 
 void ConnectionManager::processingLoop() {
-  broker::BrokerPayload msg;
-  while (m_queue.pop(msg)) {
+  Envelope env;
+  while (m_queue.pop(env)) {
     if (!m_running) {
       break;
     }
 
-    std::string key = msg.handler_key();
-
-    if (key == Keys::RESET) {
+    if (env.header.handler_key() == Keys::RESET) {
       // Re-subscribing is idempotent broker-side, so always answer a RESET -
       // a time-based guard here risks silently dropping a legitimate one.
       resubscribeAll();
     } else {
-      handleMessage(msg);
+      handleMessage(env);
     }
   }
 }
 
-void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
-  std::string topic = msg.topic();
+void ConnectionManager::handleMessage(const Envelope& env) {
+  const std::string& topic = env.header.topic();
 
   std::vector<CallbackEntry> callbacks;
   {
@@ -290,9 +286,9 @@ void ConnectionManager::handleMessage(const broker::BrokerPayload& msg) {
     }
   }
 
-  const std::string& data = msg.has_payload() ? msg.payload().SerializeAsString() : msg.raw_data();
+  const std::string& data = env.payload;
 
-  t_currentReplyTopic = msg.reply_topic();
+  t_currentReplyTopic = env.header.reply_topic();
   for (auto& entry : callbacks) {
     try {
       if (entry.func) {
@@ -333,19 +329,19 @@ void ConnectionManager::performUnregistration(const std::string& key, void* inst
     m_msgHandlers.erase(it);
 
     if (m_connected) {
-      broker::BrokerPayload unsubMsg;
-      unsubMsg.set_handler_key(Keys::UNSUBSCRIBE);
-      unsubMsg.set_sender_id(m_clientId);
-      unsubMsg.set_topic(key);
+      Envelope unsubMsg;
+      unsubMsg.header.set_handler_key(Keys::UNSUBSCRIBE);
+      unsubMsg.header.set_sender_id(m_clientId);
+      unsubMsg.header.set_topic(key);
       sendRawEnvelope(unsubMsg);
     }
   }
 }
 
-broker::BrokerPayload ConnectionManager::createControlEnvelope(const std::string_view& controlKey, const std::string& topic) {
-  broker::BrokerPayload msg;
-  msg.set_handler_key(controlKey);
-  msg.set_sender_id(m_clientId);
-  msg.set_topic(topic);
+Envelope ConnectionManager::createControlEnvelope(const std::string_view& controlKey, const std::string& topic) {
+  Envelope msg;
+  msg.header.set_handler_key(controlKey);
+  msg.header.set_sender_id(m_clientId);
+  msg.header.set_topic(topic);
   return msg;
 }

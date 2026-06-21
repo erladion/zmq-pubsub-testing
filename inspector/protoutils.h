@@ -1,6 +1,7 @@
 #ifndef PROTOUTILS_H
 #define PROTOUTILS_H
 
+#include <google/protobuf/any.pb.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
@@ -70,12 +71,8 @@ inline void populateProtobufTree(const google::protobuf::Message& msg, QTreeWidg
   }
 }
 
-inline std::unique_ptr<google::protobuf::Message> dynamicallyUnpack(const broker::BrokerPayload& payload) {
-  if (!payload.has_payload()) {
-    return nullptr;
-  }
-
-  std::string typeUrl = payload.payload().type_url();
+inline std::unique_ptr<google::protobuf::Message> dynamicallyUnpack(const google::protobuf::Any& any) {
+  std::string typeUrl = any.type_url();
   std::string typeName = typeUrl.substr(typeUrl.find_last_of('/') + 1);
 
   const google::protobuf::Descriptor* descriptor = google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(typeName);
@@ -89,21 +86,28 @@ inline std::unique_ptr<google::protobuf::Message> dynamicallyUnpack(const broker
   }
 
   std::unique_ptr<google::protobuf::Message> dynamicMsg(prototype->New());
-  if (payload.payload().UnpackTo(dynamicMsg.get())) {
+  if (any.UnpackTo(dynamicMsg.get())) {
     return dynamicMsg;
   }
   return nullptr;
 }
 
-inline void drawEnvelopeAndPayload(const broker::BrokerPayload& envelope, QTreeWidget* treeWidget) {
+inline void drawEnvelopeAndPayload(const broker::MessageHeader& header, const std::string& payload, QTreeWidget* treeWidget) {
   QTreeWidgetItem* envelopeRoot = new QTreeWidgetItem(treeWidget);
-  envelopeRoot->setText(0, "Broker Envelope");
-  populateProtobufTree(envelope, envelopeRoot);
+  envelopeRoot->setText(0, "Message Header");
+  populateProtobufTree(header, envelopeRoot);
   envelopeRoot->setExpanded(true);
 
-  // Draw the Inner Payload (If it's a Protobuf)
-  if (envelope.has_payload()) {
-    auto dynamicPayload = dynamicallyUnpack(envelope);
+  if (payload.empty()) {
+    return;
+  }
+
+  // The payload frame is opaque. Protobuf payloads (from the client lib and the
+  // broker's stats) arrive as a packed Any; try that first and fall back to a
+  // raw byte view for anything else (JSON, structs, plain strings).
+  google::protobuf::Any any;
+  if (any.ParseFromString(payload) && any.type_url().rfind("type.googleapis.com/", 0) == 0) {
+    auto dynamicPayload = dynamicallyUnpack(any);
     if (dynamicPayload) {
       QTreeWidgetItem* payloadRoot = new QTreeWidgetItem(treeWidget);
       payloadRoot->setText(0, QString::fromStdString(std::string(dynamicPayload->GetTypeName())));
@@ -114,11 +118,12 @@ inline void drawEnvelopeAndPayload(const broker::BrokerPayload& envelope, QTreeW
       errorRoot->setText(0, "[Unknown Protobuf Schema]");
       errorRoot->setText(1, "Link .pb.cc file to view");
     }
-  } else if (!envelope.raw_data().empty()) {  // Draw the Inner Payload (If it's raw C++ struct bytes / string)
-    QTreeWidgetItem* rawRoot = new QTreeWidgetItem(treeWidget);
-    rawRoot->setText(0, "Raw Payload");
-    rawRoot->setText(1, QString("[%1 bytes]").arg(envelope.raw_data().size()));
+    return;
   }
+
+  QTreeWidgetItem* rawRoot = new QTreeWidgetItem(treeWidget);
+  rawRoot->setText(0, "Raw Payload");
+  rawRoot->setText(1, QString("[%1 bytes]").arg(payload.size()));
 }
 
 }  // namespace ProtoUtils

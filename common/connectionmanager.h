@@ -20,6 +20,7 @@
 #include "config.h"
 #include "logger.h"
 #include "safequeue.h"
+#include "wireframe.h"
 #include "workerinterface.h"
 
 using MessageCallback = std::function<void(const std::string&)>;
@@ -76,27 +77,32 @@ bool tryUnpack(const std::string& raw, T& outMsg) {
     return any.Is<T>() && any.UnpackTo(&outMsg);
   }
 
-  // Not an Any: treat as a bare serialized T (e.g. raw_data set directly).
+  // Not an Any: treat as a bare serialized T (e.g. a raw payload frame).
   outMsg.Clear();
   return outMsg.ParseFromString(raw);
 }
 
-// The single source of truth for how a C++ value maps onto a BrokerPayload
-// and back; sendMessage/replyToSender/registerCallback all funnel through
-// here. Dispatch order: DataSerializer specializations, then protobuf, then
-// std::string, then trivially copyable structs.
+// The single source of truth for how a C++ value maps onto a payload frame and
+// back; sendMessage/replyToSender/registerCallback all funnel through here.
+// Returns the opaque bytes that become the Envelope's payload frame. Dispatch
+// order: DataSerializer specializations, then protobuf, then std::string, then
+// trivially copyable structs.
 template <typename T>
-void encodePayload(broker::BrokerPayload& envelope, const T& value) {
+std::string encodePayload(const T& value) {
   if constexpr (DataSerializer<T>::is_specialized) {
-    envelope.set_raw_data(DataSerializer<T>::serialize(value));
+    return DataSerializer<T>::serialize(value);
   } else if constexpr (std::is_base_of<google::protobuf::Message, T>::value) {
-    envelope.mutable_payload()->PackFrom(value);
+    // Packed into an Any so the bytes stay self-describing: the broker forwards
+    // them opaquely, and the receiver's tryUnpack() can recover the type.
+    google::protobuf::Any any;
+    any.PackFrom(value);
+    return any.SerializeAsString();
   } else if constexpr (std::is_same<T, std::string>::value) {
-    envelope.set_raw_data(value);
+    return value;
   } else if constexpr (std::is_trivially_copyable<T>::value && std::is_standard_layout<T>::value) {
     // Byte-copied structs assume both endpoints share the same ABI; layout
     // and padding are not part of the wire contract.
-    envelope.set_raw_data(reinterpret_cast<const char*>(&value), sizeof(T));
+    return std::string(reinterpret_cast<const char*>(&value), sizeof(T));
   } else {
     static_assert(always_false_v<T>,
                   "No wire encoding for this type. Expected a protobuf Message, a DataSerializer-specialized type, "
@@ -104,8 +110,8 @@ void encodePayload(broker::BrokerPayload& envelope, const T& value) {
   }
 }
 
-// `raw` is what handleMessage hands to callbacks: the serialized Any if the
-// envelope had a packed payload, the raw_data bytes otherwise. T must be
+// `raw` is the payload frame handleMessage hands to callbacks: a serialized Any
+// for protobuf payloads, the raw bytes otherwise. T must be
 // default-constructible.
 template <typename T>
 bool decodePayload(const std::string& raw, T& out) {
@@ -154,11 +160,11 @@ public:
     if (!self) {
       return false;
     }
-    broker::BrokerPayload envelope;
-    envelope.set_handler_key(key);
-    envelope.set_sender_id(self->m_clientId);
-    envelope.set_topic(key);
-    detail::encodePayload(envelope, value);
+    Envelope envelope;
+    envelope.header.set_handler_key(key);
+    envelope.header.set_sender_id(self->m_clientId);
+    envelope.header.set_topic(key);
+    envelope.payload = detail::encodePayload(value);
     return self->sendRawEnvelope(envelope);
   }
 
@@ -241,8 +247,8 @@ public:
     if (!self) {
       return false;
     }
-    broker::BrokerPayload reply;
-    detail::encodePayload(reply, value);
+    Envelope reply;
+    reply.payload = detail::encodePayload(value);
     return self->sendReplyEnvelope(reply);
   }
 
@@ -259,18 +265,18 @@ private:
   static std::shared_ptr<ConnectionManager> getInstance();
 
   bool sendDataInternal(const std::string& key, const std::string_view& data);
-  bool sendRawEnvelope(const broker::BrokerPayload& envelope);
+  bool sendRawEnvelope(const Envelope& envelope);
 
   // Stamps the current request's reply addressing onto `reply` and sends it;
   // the payload must already be encoded.
-  bool sendReplyEnvelope(broker::BrokerPayload& reply);
+  bool sendReplyEnvelope(Envelope& reply);
 
   void processingLoop();
-  void handleMessage(const broker::BrokerPayload& msg);
+  void handleMessage(const Envelope& env);
 
   void performRegistration(const std::string& key, MessageCallback callback, void* instance);
   void performUnregistration(const std::string& key, void* instance);
-  broker::BrokerPayload createControlEnvelope(const std::string_view& controlKey, const std::string& topic);
+  Envelope createControlEnvelope(const std::string_view& controlKey, const std::string& topic);
 
 private:
   static std::shared_ptr<ConnectionManager> m_instance;
@@ -280,7 +286,7 @@ private:
 
   std::unique_ptr<WorkerInterface> m_pWorker;
 
-  SafeQueue<broker::BrokerPayload> m_queue;
+  SafeQueue<Envelope> m_queue;
   std::thread m_processingThread;
   std::atomic<bool> m_running;
   std::atomic<bool> m_connected;

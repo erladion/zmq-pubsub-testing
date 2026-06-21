@@ -3,12 +3,14 @@
 #include <chrono>
 #include <memory>
 
+#include <google/protobuf/any.pb.h>
 #include <google/protobuf/util/message_differencer.h>
 
 #include "broker.pb.h"
 #include "generated/update.pb.h"
 
 #include "safequeue.h"
+#include "wireframe.h"
 #include "zmqbroker.h"
 #include "zmqworker.h"
 
@@ -26,10 +28,10 @@ const std::string kTopic = "any-payload-test";
 
 // Spins up a real ZmqBroker plus one publisher and one subscriber connected to
 // it, then verifies that arbitrary protobuf types survive a round trip through
-// the broker's generic google.protobuf.Any payload field intact - exercising
-// the same dynamic pack/unpack path the Inspector relies on
-// (ProtoUtils::dynamicallyUnpack) and that any future message type added to
-// the mesh can flow through without the broker needing to know about it.
+// the broker's opaque payload frame intact - exercising the same dynamic
+// pack/unpack path the Inspector relies on (ProtoUtils::dynamicallyUnpack) and
+// that any future message type added to the mesh can flow through without the
+// broker needing to know about it.
 class AnyPayloadRoundtripTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -81,17 +83,17 @@ protected:
     for (int attempt = 0; attempt < 40; ++attempt) {
       const std::string nonce = "probe-" + std::to_string(attempt);
 
-      broker::BrokerPayload probe;
-      probe.set_handler_key("PROBE");
-      probe.set_sender_id("any-payload-publisher");
-      probe.set_topic(kTopic);
-      probe.set_raw_data(nonce);
+      Envelope probe;
+      probe.header.set_handler_key("PROBE");
+      probe.header.set_sender_id("any-payload-publisher");
+      probe.header.set_topic(kTopic);
+      probe.payload = nonce;
       m_publisher->writeMessage(probe);
 
       const auto deadline = std::chrono::steady_clock::now() + 150ms;
-      broker::BrokerPayload received;
+      Envelope received;
       while (std::chrono::steady_clock::now() < deadline) {
-        if (popWithTimeout(m_inbound, received, 20ms) && received.handler_key() == "PROBE" && received.raw_data() == nonce) {
+        if (popWithTimeout(m_inbound, received, 20ms) && received.header.handler_key() == "PROBE" && received.payload == nonce) {
           drainInbound();
           return true;
         }
@@ -107,34 +109,39 @@ protected:
   // Pops and discards everything currently queued (handshake RESETs, stale
   // unmatched probes, ...) so the real assertions start from a clean slate.
   void drainInbound() {
-    broker::BrokerPayload discard;
+    Envelope discard;
     while (popWithTimeout(m_inbound, discard, 150ms)) {
     }
   }
 
-  // Wraps `original` in a BrokerPayload envelope's Any field, sends it through
-  // the live broker, and asserts that what the subscriber receives unpacks back
-  // to an identical message of the same concrete type.
+  // Packs `original` into an Any, ships it as the envelope's payload frame
+  // through the live broker, and asserts that what the subscriber receives
+  // unpacks back to an identical message of the same concrete type.
   template <typename ProtoT>
   void expectRoundTrips(const std::string& handlerKey, const ProtoT& original) {
-    broker::BrokerPayload envelope;
-    envelope.set_handler_key(handlerKey);
-    envelope.set_sender_id("any-payload-publisher");
-    envelope.set_topic(kTopic);
-    envelope.mutable_payload()->PackFrom(original);
+    Envelope envelope;
+    envelope.header.set_handler_key(handlerKey);
+    envelope.header.set_sender_id("any-payload-publisher");
+    envelope.header.set_topic(kTopic);
+
+    google::protobuf::Any any;
+    any.PackFrom(original);
+    envelope.payload = any.SerializeAsString();
 
     ASSERT_TRUE(m_publisher->writeMessage(envelope));
 
-    broker::BrokerPayload received;
+    Envelope received;
     ASSERT_TRUE(popWithTimeout(m_inbound, received, 2s)) << "Timed out waiting for '" << handlerKey << "' to round-trip through the broker";
 
-    EXPECT_EQ(received.handler_key(), handlerKey);
-    EXPECT_EQ(received.topic(), kTopic);
-    ASSERT_TRUE(received.has_payload());
-    ASSERT_TRUE(received.payload().Is<ProtoT>()) << "Any payload lost/changed its type URL in transit";
+    EXPECT_EQ(received.header.handler_key(), handlerKey);
+    EXPECT_EQ(received.header.topic(), kTopic);
+
+    google::protobuf::Any receivedAny;
+    ASSERT_TRUE(receivedAny.ParseFromString(received.payload)) << "Payload frame was not a serialized Any";
+    ASSERT_TRUE(receivedAny.Is<ProtoT>()) << "Any payload lost/changed its type URL in transit";
 
     ProtoT unpacked;
-    ASSERT_TRUE(received.payload().UnpackTo(&unpacked));
+    ASSERT_TRUE(receivedAny.UnpackTo(&unpacked));
 
     EXPECT_TRUE(google::protobuf::util::MessageDifferencer::Equals(unpacked, original))
         << "Round-tripped message differs from the original.\n"
@@ -145,7 +152,7 @@ protected:
   std::unique_ptr<ZmqBroker> m_broker;
   std::unique_ptr<ZmqWorker> m_subscriber;
   std::unique_ptr<ZmqWorker> m_publisher;
-  SafeQueue<broker::BrokerPayload> m_inbound;
+  SafeQueue<Envelope> m_inbound;
 };
 
 TEST_F(AnyPayloadRoundtripTest, FlatMessageSurvivesRoundTrip) {
@@ -185,15 +192,16 @@ TEST_F(AnyPayloadRoundtripTest, MessageWithRepeatedScalarFieldSurvivesRoundTrip)
 }
 
 TEST_F(AnyPayloadRoundtripTest, EnvelopeNestedInsideAnEnvelopeSurvivesRoundTrip) {
-  // google.protobuf.Any can hold *any* registered protobuf type - including
-  // BrokerPayload itself. This is a good stress case for the dynamic-descriptor
-  // lookup that both the broker's pass-through and the Inspector's
-  // ProtoUtils::dynamicallyUnpack depend on, one level deeper than usual.
-  broker::BrokerPayload inner;
+  // google.protobuf.Any can hold *any* registered protobuf type - including the
+  // mesh's own MessageHeader. This is a good stress case for the
+  // dynamic-descriptor lookup that both the broker's pass-through and the
+  // Inspector's ProtoUtils::dynamicallyUnpack depend on, one level deeper than
+  // usual.
+  broker::MessageHeader inner;
   inner.set_handler_key("INNER");
   inner.set_sender_id("nested-sender");
   inner.set_topic("nested-topic");
-  inner.set_raw_data("nested raw data");
+  inner.set_reply_topic("nested-reply");
 
   expectRoundTrips("ENVELOPE_IN_ENVELOPE", inner);
 }

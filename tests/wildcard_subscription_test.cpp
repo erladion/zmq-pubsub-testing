@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "safequeue.h"
+#include "wireframe.h"
 #include "zmqbroker.h"
 #include "zmqworker.h"
 
@@ -47,7 +48,7 @@ protected:
 TEST_F(WildcardSubscriptionTest, EmptyTopicSubscriberReceivesEveryTopic) {
   startBroker(testBrokerAddress());
 
-  SafeQueue<broker::BrokerPayload> inbound;
+  SafeQueue<Envelope> inbound;
   ConnectionConfig subConfig;
   subConfig.address = testBrokerAddress();
   subConfig.clientId = "wildcard-subscriber";
@@ -65,18 +66,18 @@ TEST_F(WildcardSubscriptionTest, EmptyTopicSubscriberReceivesEveryTopic) {
 
   // Re-publish until delivery: SUBSCRIBE is processed asynchronously by the
   // broker, so early publishes can race a not-yet-active subscription.
-  broker::BrokerPayload received;
+  Envelope received;
   bool got = false;
   for (int attempt = 0; attempt < 30 && !got; ++attempt) {
-    broker::BrokerPayload msg;
-    msg.set_handler_key("wildcard-data");
-    msg.set_sender_id(pubConfig.clientId);
-    msg.set_topic("some-arbitrary-topic");
-    msg.set_raw_data("hello");
+    Envelope msg;
+    msg.header.set_handler_key("wildcard-data");
+    msg.header.set_sender_id(pubConfig.clientId);
+    msg.header.set_topic("some-arbitrary-topic");
+    msg.payload = "hello";
     publisher.writeMessage(msg);
 
     while (popWithTimeout(inbound, received, 300ms)) {
-      if (received.topic() == "some-arbitrary-topic") {
+      if (received.header.topic() == "some-arbitrary-topic") {
         got = true;
         break;
       }
@@ -84,7 +85,7 @@ TEST_F(WildcardSubscriptionTest, EmptyTopicSubscriberReceivesEveryTopic) {
   }
 
   ASSERT_TRUE(got) << "Wildcard (\"\") subscriber never received a message published on another topic";
-  EXPECT_EQ(received.raw_data(), "hello");
+  EXPECT_EQ(received.payload, "hello");
 
   publisher.stop();
   subscriberWorker.stop();
@@ -97,7 +98,7 @@ TEST_F(WildcardSubscriptionTest, OverlappingExactAndWildcardSubscriptionsDeliver
 
   const std::string topic = "dup-check-topic";
 
-  SafeQueue<broker::BrokerPayload> inbound;
+  SafeQueue<Envelope> inbound;
   ConnectionConfig subConfig;
   subConfig.address = testBrokerAddress();
   subConfig.clientId = "overlap-subscriber";
@@ -116,19 +117,19 @@ TEST_F(WildcardSubscriptionTest, OverlappingExactAndWildcardSubscriptionsDeliver
 
   // Each attempt carries a unique payload so a duplicate delivery of the
   // received attempt is distinguishable from a late delivery of an earlier one.
-  broker::BrokerPayload received;
+  Envelope received;
   std::string gotPayload;
   for (int attempt = 0; attempt < 30 && gotPayload.empty(); ++attempt) {
-    broker::BrokerPayload msg;
-    msg.set_handler_key("dup-check-data");
-    msg.set_sender_id(pubConfig.clientId);
-    msg.set_topic(topic);
-    msg.set_raw_data("copy-check-" + std::to_string(attempt));
+    Envelope msg;
+    msg.header.set_handler_key("dup-check-data");
+    msg.header.set_sender_id(pubConfig.clientId);
+    msg.header.set_topic(topic);
+    msg.payload = "copy-check-" + std::to_string(attempt);
     publisher.writeMessage(msg);
 
     while (popWithTimeout(inbound, received, 300ms)) {
-      if (received.topic() == topic) {
-        gotPayload = received.raw_data();
+      if (received.header.topic() == topic) {
+        gotPayload = received.payload;
         break;
       }
     }
@@ -137,9 +138,9 @@ TEST_F(WildcardSubscriptionTest, OverlappingExactAndWildcardSubscriptionsDeliver
   ASSERT_FALSE(gotPayload.empty()) << "Subscriber never received the published message at all";
 
   int duplicates = 0;
-  broker::BrokerPayload extra;
+  Envelope extra;
   while (popWithTimeout(inbound, extra, 500ms)) {
-    if (extra.topic() == topic && extra.raw_data() == gotPayload) {
+    if (extra.header.topic() == topic && extra.payload == gotPayload) {
       duplicates++;
     }
   }
@@ -160,7 +161,7 @@ TEST_F(WildcardSubscriptionTest, PeerLinkForwardsRemoteMessagesToLocalSubscriber
 
   const std::string topic = "peer-topic";
 
-  SafeQueue<broker::BrokerPayload> inbound;
+  SafeQueue<Envelope> inbound;
   ConnectionConfig subConfig;
   subConfig.address = kPeerBrokerAddress;
   subConfig.clientId = "peer-subscriber";
@@ -178,18 +179,18 @@ TEST_F(WildcardSubscriptionTest, PeerLinkForwardsRemoteMessagesToLocalSubscriber
 
   // The peer link needs its own handshake with broker B (heartbeat -> RESET ->
   // wildcard SUBSCRIBE) before anything flows, hence the generous retry loop.
-  broker::BrokerPayload received;
+  Envelope received;
   bool got = false;
   for (int attempt = 0; attempt < 30 && !got; ++attempt) {
-    broker::BrokerPayload msg;
-    msg.set_handler_key("peer-data");
-    msg.set_sender_id(pubConfig.clientId);
-    msg.set_topic(topic);
-    msg.set_raw_data("across-the-mesh");
+    Envelope msg;
+    msg.header.set_handler_key("peer-data");
+    msg.header.set_sender_id(pubConfig.clientId);
+    msg.header.set_topic(topic);
+    msg.payload = "across-the-mesh";
     publisher.writeMessage(msg);
 
     while (popWithTimeout(inbound, received, 300ms)) {
-      if (received.topic() == topic) {
+      if (received.header.topic() == topic) {
         got = true;
         break;
       }
@@ -197,7 +198,7 @@ TEST_F(WildcardSubscriptionTest, PeerLinkForwardsRemoteMessagesToLocalSubscriber
   }
 
   ASSERT_TRUE(got) << "Message published on the remote broker never reached a subscriber on the linked broker";
-  EXPECT_EQ(received.raw_data(), "across-the-mesh");
+  EXPECT_EQ(received.payload, "across-the-mesh");
 
   publisher.stop();
   subscriberWorker.stop();

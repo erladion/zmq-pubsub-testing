@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "config.h"
+#include "wireframe.h"
 
 std::string getCurrentTimestamp() {
   auto now = std::chrono::system_clock::now();
@@ -28,21 +29,21 @@ void InspectorWorker::run() {
   inspector.set(zmq::sockopt::subscribe, "");
 
   while (m_running) {
-    zmq::message_t msg;
-    // Use dontwait so we can check m_running and exit cleanly
-    if (inspector.recv(msg, zmq::recv_flags::dontwait)) {
+    // Use dontwait so we can check m_running and exit cleanly. The broker's
+    // inspector PUB socket carries no routing-id frame, so wire::recv reads the
+    // header frame and any payload continuation frame directly.
+    Envelope env;
+    if (wire::recv(inspector, env, zmq::recv_flags::dontwait)) {
       InspectorPacket p;
-      p.rawMemory = std::string(static_cast<char*>(msg.data()), msg.size());
+      p.timestamp = getCurrentTimestamp();
+      p.senderId = env.header.sender_id();
+      p.key = env.header.handler_key();
+      p.topic = env.header.topic();
+      p.sizeBytes = env.header.ByteSizeLong() + env.payload.size();
+      p.header = std::move(env.header);
+      p.payload = std::move(env.payload);
 
-      if (p.parsedProto.ParseFromString(p.rawMemory)) {
-        p.timestamp = getCurrentTimestamp();
-        p.senderId = p.parsedProto.sender_id();
-        p.key = p.parsedProto.handler_key();
-        p.topic = p.parsedProto.topic();
-        p.sizeBytes = msg.size();
-
-        emit packetReceived(p);
-      }
+      emit packetReceived(p);
     } else {
       QThread::msleep(10);
     }

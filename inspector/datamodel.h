@@ -11,11 +11,10 @@ struct InspectorPacket {
   std::string senderId;
   std::string key;
   std::string topic;
-  size_t sizeBytes;
+  size_t sizeBytes;  // header + payload bytes on the wire
 
-  std::string rawMemory;
-
-  broker::BrokerPayload parsedProto;
+  broker::MessageHeader header;
+  std::string payload;  // opaque payload frame bytes
 };
 
 Q_DECLARE_METATYPE(InspectorPacket)

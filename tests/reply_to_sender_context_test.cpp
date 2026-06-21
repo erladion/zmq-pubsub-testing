@@ -8,6 +8,7 @@
 
 #include "connectionmanager.h"
 #include "safequeue.h"
+#include "wireframe.h"
 #include "zmqbroker.h"
 #include "zmqworker.h"
 
@@ -89,11 +90,11 @@ TEST_F(ReplyToSenderContextTest, CallFromInsideRegularPubSubHandlerFailsGraceful
   // the handler actually fires - the same registration race the request/reply
   // tests guard against.
   for (int attempt = 0; attempt < 30 && !handlerRan; ++attempt) {
-    broker::BrokerPayload message;
-    message.set_handler_key(kTopic);
-    message.set_sender_id(publisherId);
-    message.set_topic(kTopic);
-    message.set_raw_data("no-reply-topic-here");
+    Envelope message;
+    message.header.set_handler_key(kTopic);
+    message.header.set_sender_id(publisherId);
+    message.header.set_topic(kTopic);
+    message.payload = "no-reply-topic-here";
     // Deliberately leave reply_topic unset - this is a plain pub/sub message,
     // not a request.
     publisher.writeMessage(message);

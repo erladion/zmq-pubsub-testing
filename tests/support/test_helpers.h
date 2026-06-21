@@ -5,9 +5,9 @@
 #include <string>
 #include <thread>
 
-#include "broker.pb.h"
 #include "messagekeys.h"
 #include "safequeue.h"
+#include "wireframe.h"
 #include "zmqworker.h"
 
 namespace TestSupport {
@@ -40,18 +40,18 @@ bool popWithTimeout(SafeQueue<T>& queue, T& out, std::chrono::milliseconds timeo
 // these tests have to do it explicitly before the broker will act on anything
 // else they send.
 inline void completeHandshake(ZmqWorker& worker, const std::string& clientId) {
-  broker::BrokerPayload connect;
-  connect.set_handler_key(Keys::CONNECT);
-  connect.set_sender_id(clientId);
-  connect.set_topic("");
+  Envelope connect;
+  connect.header.set_handler_key(Keys::CONNECT);
+  connect.header.set_sender_id(clientId);
+  connect.header.set_topic("");
   worker.writeControlMessage(connect);
 }
 
 inline void subscribe(ZmqWorker& worker, const std::string& clientId, const std::string& topic) {
-  broker::BrokerPayload sub;
-  sub.set_handler_key(Keys::SUBSCRIBE);
-  sub.set_sender_id(clientId);
-  sub.set_topic(topic);
+  Envelope sub;
+  sub.header.set_handler_key(Keys::SUBSCRIBE);
+  sub.header.set_sender_id(clientId);
+  sub.header.set_topic(topic);
   worker.writeControlMessage(sub);
 }
 

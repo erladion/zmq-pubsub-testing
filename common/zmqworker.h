@@ -8,21 +8,20 @@
 
 #include <zmq.hpp>
 
-#include "broker.pb.h"
-
 #include "config.h"
 #include "safequeue.h"
+#include "wireframe.h"
 #include "workerinterface.h"
 
 class ZmqWorker final : public WorkerInterface {
 public:
-  ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, WorkerStatusCallback statusCb);
+  ZmqWorker(const ConnectionConfig& config, SafeQueue<Envelope>* inboundQueue, WorkerStatusCallback statusCb);
   ~ZmqWorker();
 
   void start() override;
   void stop() override;
-  bool writeMessage(const broker::BrokerPayload& msg) override;
-  bool writeControlMessage(const broker::BrokerPayload& msg) override;
+  bool writeMessage(const Envelope& msg) override;
+  bool writeControlMessage(const Envelope& msg) override;
   void setMessageCallback(WorkerMessageCallback callback) override;
 
 private:
@@ -31,7 +30,7 @@ private:
 
 private:
   ConnectionConfig m_config;
-  SafeQueue<broker::BrokerPayload>* m_pInboundQueue;
+  SafeQueue<Envelope>* m_pInboundQueue;
   WorkerStatusCallback m_statusCallback;
   WorkerMessageCallback m_messageCallback;
 
@@ -40,8 +39,8 @@ private:
 
   zmq::context_t m_context;
 
-  SafeQueue<broker::BrokerPayload> m_controlQueue;
-  SafeQueue<broker::BrokerPayload> m_outboundQueue;
+  SafeQueue<Envelope> m_controlQueue;
+  SafeQueue<Envelope> m_outboundQueue;
 
   std::atomic<bool> m_isOnline;
   std::chrono::steady_clock::time_point m_lastRxTime;

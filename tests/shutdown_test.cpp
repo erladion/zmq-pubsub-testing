@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 
+#include "wireframe.h"
 #include "zmqbroker.h"
 #include "zmqworker.h"
 
@@ -59,11 +60,11 @@ TEST(ShutdownTest, WorkerStopsPromptlyWithUnreachableBrokerAndFullSendPipe) {
 
   // Far more messages than the default send HWM (1000) so the pipe is
   // guaranteed full while the connection can never be established.
-  broker::BrokerPayload msg;
-  msg.set_handler_key("flood");
-  msg.set_sender_id(config.clientId);
-  msg.set_topic("flood");
-  msg.set_raw_data(std::string(512, 'x'));
+  Envelope msg;
+  msg.header.set_handler_key("flood");
+  msg.header.set_sender_id(config.clientId);
+  msg.header.set_topic("flood");
+  msg.payload = std::string(512, 'x');
   for (int i = 0; i < 3000; ++i) {
     worker->writeMessage(msg);
   }

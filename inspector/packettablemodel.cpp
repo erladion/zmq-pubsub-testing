@@ -61,11 +61,9 @@ QVariant PacketTableModel::data(const QModelIndex& index, int role) const {
         return t.isEmpty() ? "[Empty]" : t;
       }
       case 4:
-        return formatByteSize(packet.rawMemory.size());
-      case 5: {
-        size_t payloadSize = packet.parsedProto.has_payload() ? packet.parsedProto.payload().ByteSizeLong() : packet.parsedProto.raw_data().size();
-        return formatByteSize(payloadSize);
-      }
+        return formatByteSize(packet.sizeBytes);
+      case 5:
+        return formatByteSize(packet.payload.size());
     }
   } else if (role == Qt::TextAlignmentRole && (index.column() == 4 || index.column() == 5)) {
     return int(Qt::AlignRight | Qt::AlignVCenter);

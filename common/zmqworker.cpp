@@ -2,11 +2,11 @@
 
 #include "logger.h"
 #include "messagekeys.h"
-#include "protoutils.h"
+#include "wireframe.h"
 
 #include <iostream>
 
-ZmqWorker::ZmqWorker(const ConnectionConfig& config, SafeQueue<broker::BrokerPayload>* inboundQueue, WorkerStatusCallback statusCb)
+ZmqWorker::ZmqWorker(const ConnectionConfig& config, SafeQueue<Envelope>* inboundQueue, WorkerStatusCallback statusCb)
     : m_config(config), m_pInboundQueue(inboundQueue), m_statusCallback(statusCb), m_running(false), m_context(1), m_isOnline(false) {}
 
 ZmqWorker::~ZmqWorker() {
@@ -25,11 +25,11 @@ void ZmqWorker::stop() {
   }
 }
 
-bool ZmqWorker::writeMessage(const broker::BrokerPayload& msg) {
+bool ZmqWorker::writeMessage(const Envelope& msg) {
   return m_outboundQueue.push(msg, std::chrono::milliseconds(100));
 }
 
-bool ZmqWorker::writeControlMessage(const broker::BrokerPayload& msg) {
+bool ZmqWorker::writeControlMessage(const Envelope& msg) {
   return m_controlQueue.push(msg, std::chrono::milliseconds(100));
 }
 
@@ -57,7 +57,7 @@ void ZmqWorker::run() {
     m_statusCallback(m_isOnline);
   }
 
-  broker::BrokerPayload payload;
+  Envelope envelope;
   bool didWork = false;
   while (m_running) {
     zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
@@ -66,8 +66,10 @@ void ZmqWorker::run() {
     didWork = false;
 
     if (items[0].revents & ZMQ_POLLIN) {
-      zmq::message_t msg;
-      if (socket.recv(msg, zmq::recv_flags::none)) {
+      // DEALER never carries the routing-id frame, so the first frame is the
+      // header - wire::recv reads it plus any payload continuation frame.
+      Envelope inbound;
+      if (wire::recv(socket, inbound, zmq::recv_flags::none)) {
         didWork = true;
         m_lastRxTime = std::chrono::steady_clock::now();
 
@@ -78,37 +80,28 @@ void ZmqWorker::run() {
           }
         }
 
-        payload.Clear();
-        if (payload.ParseFromArray(msg.data(), msg.size())) {
-          if (payload.handler_key() == Keys::HEARTBEAT_ACK) {
-            // Liveness only - m_lastRxTime was already updated above
-          } else if (m_pInboundQueue) {
-            // Single timed attempt: if the consumer can't keep up, drop -
-            // delivery is best-effort everywhere else in the stack too.
-            (void)m_pInboundQueue->push(payload, std::chrono::milliseconds(100));
-          } else if (m_messageCallback) {
-            m_messageCallback(payload);
-          }
-        } else {
-          Logger::Log(Logger::ERROR, "Failed to parse Protobuf message! Dropping packet.");
+        if (inbound.header.handler_key() == Keys::HEARTBEAT_ACK) {
+          // Liveness only - m_lastRxTime was already updated above
+        } else if (m_pInboundQueue) {
+          // Single timed attempt: if the consumer can't keep up, drop -
+          // delivery is best-effort everywhere else in the stack too.
+          (void)m_pInboundQueue->push(std::move(inbound), std::chrono::milliseconds(100));
+        } else if (m_messageCallback) {
+          m_messageCallback(inbound);
         }
       }
     }
 
-    payload.Clear();
-    while (m_controlQueue.try_pop(payload)) {
-      zmq::message_t msg = createZmqMsg(payload);
+    while (m_controlQueue.try_pop(envelope)) {
       // dontwait: a full send pipe (broker down or stalled) must not wedge
       // this thread - stop() needs the loop alive to join it. Overflow is
       // dropped; subscriptions resync via the RESET handshake on reconnect.
-      (void)socket.send(msg, zmq::send_flags::dontwait);
+      (void)wire::send(socket, envelope);
       didWork = true;
     }
 
-    payload.Clear();
-    while (m_outboundQueue.try_pop(payload)) {
-      zmq::message_t msg = createZmqMsg(payload);
-      (void)socket.send(msg, zmq::send_flags::dontwait);
+    while (m_outboundQueue.try_pop(envelope)) {
+      (void)wire::send(socket, envelope);
       didWork = true;
     }
 
@@ -130,21 +123,18 @@ void ZmqWorker::run() {
   // Final drain so control messages queued during shutdown (DISCONNECT from
   // ConnectionManager::shutdown()) are sent before the socket closes; without
   // it the broker only notices the disconnect via its zombie timeout.
-  payload.Clear();
-  while (m_controlQueue.try_pop(payload)) {
-    zmq::message_t msg = createZmqMsg(payload);
-    (void)socket.send(msg, zmq::send_flags::dontwait);
+  while (m_controlQueue.try_pop(envelope)) {
+    (void)wire::send(socket, envelope);
   }
 
   socket.close();
 }
 
 void ZmqWorker::sendHeartbeat(zmq::socket_t& socket) {
-  broker::BrokerPayload hb;
+  broker::MessageHeader hb;
   hb.set_handler_key(Keys::HEARTBEAT);
   hb.set_sender_id(m_config.clientId);
   hb.set_topic("");
 
-  zmq::message_t zMsg = createZmqMsg(hb);
-  (void)socket.send(zMsg, zmq::send_flags::dontwait);
+  (void)wire::send(socket, hb, std::string());
 }

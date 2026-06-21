@@ -76,7 +76,8 @@ void MainWindow::onNewPacket(const InspectorPacket& packet) {
   if (packet.topic == Keys::SYS_STATS) {
     broker::SystemStats statsMsg;
 
-    if (packet.parsedProto.payload().UnpackTo(&statsMsg)) {
+    google::protobuf::Any any;
+    if (any.ParseFromString(packet.payload) && any.UnpackTo(&statsMsg)) {
       m_pBrokerIdLabel->setText(QString("Broker ID: %1").arg(QString::fromStdString(statsMsg.broker_id())));
       m_pUptimeLabel->setText(QString("Uptime: %1 s").arg(statsMsg.uptime_sec()));
 
@@ -99,9 +100,9 @@ void MainWindow::onSelectionChanged() {
   int row = m_pProxyModel->mapToSource(selected.first()).row();
 
   const InspectorPacket& packet = m_packetHistory[row];
-  m_pHexDump->setPlainText(QString::fromStdString(HexUtils::generateHexDump(packet.rawMemory)));
+  m_pHexDump->setPlainText(QString::fromStdString(HexUtils::generateHexDump(packet.payload)));
   m_pProtoTree->clear();
-  ProtoUtils::drawEnvelopeAndPayload(packet.parsedProto, m_pProtoTree);
+  ProtoUtils::drawEnvelopeAndPayload(packet.header, packet.payload, m_pProtoTree);
 }
 
 void MainWindow::setupUi() {
@@ -253,20 +254,22 @@ void MainWindow::replaySelectedMessage() {
     return;
   }
 
-  broker::BrokerPayload replayedMsg = m_packetHistory[row].parsedProto;
+  Envelope replayed;
+  replayed.header = m_packetHistory[row].header;
+  replayed.payload = m_packetHistory[row].payload;
 
-  replayedMsg.set_message_uuid(generateUUID());
+  replayed.header.set_message_uuid(generateUUID());
 
-  std::string originalSender = replayedMsg.sender_id();
+  std::string originalSender = replayed.header.sender_id();
   if (originalSender.find("REPLAY_") == std::string::npos) {
-    replayedMsg.set_sender_id("REPLAY_" + originalSender);
+    replayed.header.set_sender_id("REPLAY_" + originalSender);
   }
 
-  if (Keys::isControlMessage(replayedMsg.handler_key())) {
-    m_pInjector->writeControlMessage(replayedMsg);
+  if (Keys::isControlMessage(replayed.header.handler_key())) {
+    m_pInjector->writeControlMessage(replayed);
   } else {
-    m_pInjector->writeMessage(replayedMsg);
+    m_pInjector->writeMessage(replayed);
   }
 
-  Logger::Log(Logger::INFO, "Injected replay for topic: " + replayedMsg.topic());
+  Logger::Log(Logger::INFO, "Injected replay for topic: " + replayed.header.topic());
 }

@@ -4,9 +4,9 @@
 #include <functional>
 #include <string>
 
-#include "broker.pb.h"
+#include "wireframe.h"
 
-using WorkerMessageCallback = std::function<void(const broker::BrokerPayload&)>;
+using WorkerMessageCallback = std::function<void(const Envelope&)>;
 using WorkerStatusCallback = std::function<void(bool)>;
 
 class WorkerInterface {
@@ -16,8 +16,8 @@ public:
   virtual void start() = 0;
   virtual void stop() = 0;
 
-  virtual bool writeMessage(const broker::BrokerPayload& msg) = 0;
-  virtual bool writeControlMessage(const broker::BrokerPayload& msg) = 0;
+  virtual bool writeMessage(const Envelope& msg) = 0;
+  virtual bool writeControlMessage(const Envelope& msg) = 0;
 
   virtual void setMessageCallback(WorkerMessageCallback cb) = 0;
 };

@@ -3,31 +3,38 @@
 #include "config.h"
 #include "logger.h"
 #include "messagekeys.h"
-#include "protoutils.h"
 #include "uuidhelper.h"
+#include "wireframe.h"
 
 #include <algorithm>
 #include <iostream>
 #include <sstream>
 
+#include <google/protobuf/any.pb.h>
 #include <google/protobuf/arena.h>
 #include <google/protobuf/stubs/common.h>
 
 namespace {
 
-// Two-frame ROUTER send (identity + payload), non-blocking: a slow client
-// with a full pipe must stall its own messages, not the broker loop (a
-// blocked send here would also make stop() hang). The payload frame is only
-// sent if the identity frame was accepted - zmq never rejects continuation
-// frames of a multipart message, so the pair can't be torn apart.
-void sendToClient(zmq::socket_t& socket, const std::string& clientId, zmq::message_t& data) {
+// Three-frame ROUTER send (identity + header + optional payload), non-blocking:
+// a slow client with a full pipe must stall its own messages, not the broker
+// loop (a blocked send here would also make stop() hang). The identity frame
+// gates the send - once it is accepted zmq never rejects the continuation
+// frames, so the group can't be torn apart. The header is pre-serialized by the
+// caller and the payload forwarded verbatim, so the broker never re-encodes it.
+void sendToClient(zmq::socket_t& socket, const std::string& clientId, const std::string& headerBytes, const std::string& payload) {
   zmq::message_t outId(clientId.data(), clientId.size());
-  zmq::message_t dataCopy;
-  dataCopy.copy(data);
+  zmq::message_t headerFrame(headerBytes.data(), headerBytes.size());
+  const bool hasPayload = !payload.empty();
 
   try {
-    if (socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
-      (void)socket.send(dataCopy, zmq::send_flags::dontwait);
+    if (!socket.send(outId, zmq::send_flags::sndmore | zmq::send_flags::dontwait)) {
+      return;
+    }
+    socket.send(headerFrame, (hasPayload ? zmq::send_flags::sndmore : zmq::send_flags::none) | zmq::send_flags::dontwait);
+    if (hasPayload) {
+      zmq::message_t payloadFrame(payload.data(), payload.size());
+      socket.send(payloadFrame, zmq::send_flags::dontwait);
     }
   } catch (const zmq::error_t&) {
     // Unroutable client (router_mandatory) - the zombie cleanup handles it.
@@ -98,7 +105,6 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
   auto lastCleanup = std::chrono::steady_clock::now();
 
-  broker::BrokerPayload msg;
   while (m_running) {
     // Poll for local clients
     zmq::pollitem_t items[] = {{socket.handle(), 0, ZMQ_POLLIN, 0}};
@@ -111,32 +117,26 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
           Logger::Log(Logger::WARNING, "Received single-part message on ROUTER socket. Dropping.");
           continue;
         }
-        zmq::message_t payload;
-        if (socket.recv(payload, zmq::recv_flags::none)) {
-          // Flush garbage (Multipart safety)
-          while (socket.get(zmq::sockopt::rcvmore)) {
-            zmq::message_t trash;
-            (void)socket.recv(trash, zmq::recv_flags::none);
-          }
-
+        // Identity consumed; wire::recv reads the header frame and any payload
+        // continuation frame, leaving the payload opaque (never parsed here).
+        Envelope env;
+        if (wire::recv(socket, env, zmq::recv_flags::none)) {
           // Stats
           m_totalMessages++;
           m_msgsInterval++;
-          m_totalBytes += payload.size();
-          m_bytesInterval += payload.size();
+          const uint64_t wireBytes = env.header.ByteSizeLong() + env.payload.size();
+          m_totalBytes += wireBytes;
+          m_bytesInterval += wireBytes;
 
-          msg.Clear();
-          if (msg.ParseFromArray(payload.data(), payload.size())) {
-            processMessage(socket, inspectorSocket, msg, identity.to_string(), false);
-          }
+          processMessage(socket, inspectorSocket, env.header, env.payload, identity.to_string(), false);
         }
       }
     }
 
     // Poll for peer messages
-    broker::BrokerPayload peerMsg;
-    while (m_peerInboundQueue.try_pop(peerMsg)) {
-      processMessage(socket, inspectorSocket, peerMsg, "PEER", true);
+    Envelope peerEnv;
+    while (m_peerInboundQueue.try_pop(peerEnv)) {
+      processMessage(socket, inspectorSocket, peerEnv.header, peerEnv.payload, "PEER", true);
     }
 
     auto now = std::chrono::steady_clock::now();
@@ -169,13 +169,15 @@ void ZmqBroker::run(const std::vector<std::string>& addresses) {
 
 void ZmqBroker::processMessage(zmq::socket_t& socket,
                                zmq::socket_t& inspectorSocket,
-                               broker::BrokerPayload& msg,
+                               broker::MessageHeader& header,
+                               const std::string& payload,
                                const std::string& senderId,
                                bool isFromPeer) {
-  zmq::message_t inspectorMsg = createZmqMsg(msg);
-  inspectorSocket.send(inspectorMsg, zmq::send_flags::dontwait);
+  // The inspector sees every message, control included. Forward the header and
+  // payload frames verbatim - the broker never parses the payload itself.
+  wire::send(inspectorSocket, header, payload);
 
-  std::string key = msg.handler_key();
+  std::string key = header.handler_key();
 
   // Local clients
   if (!isFromPeer) {
@@ -192,12 +194,11 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     if (newClient) {
       Logger::Log(Logger::INFO, "New client: " + senderId + ". Requesting Subscription Reset");
 
-      broker::BrokerPayload resetMsg;
-      resetMsg.set_handler_key(Keys::RESET.data(), Keys::RESET.size());
+      broker::MessageHeader resetMsg;
+      resetMsg.set_handler_key(Keys::RESET);
       resetMsg.set_topic("");
 
-      zmq::message_t outData = createZmqMsg(resetMsg);
-      sendToClient(socket, senderId, outData);
+      sendToClient(socket, senderId, resetMsg.SerializeAsString(), std::string());
 
       return;  // Don't broadcast RESET requests
     }
@@ -205,26 +206,25 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     if (key == Keys::CONNECT || key == Keys::HEARTBEAT) {
       // Just keep-alive, already handled by updating 'lastSeen' above
       if (key == Keys::HEARTBEAT) {
-        broker::BrokerPayload ack;
+        broker::MessageHeader ack;
         ack.set_handler_key(Keys::HEARTBEAT_ACK);
         ack.set_topic("");
 
-        zmq::message_t outData = createZmqMsg(ack);
-        sendToClient(socket, senderId, outData);
+        sendToClient(socket, senderId, ack.SerializeAsString(), std::string());
       }
       return;
     }
 
     if (key == Keys::SUBSCRIBE) {
-      if (m_subscriptions.subscribe(senderId, msg.topic())) {
-        Logger::Log(Logger::INFO, "Client " + senderId + " Subscribed to " + msg.topic());
+      if (m_subscriptions.subscribe(senderId, header.topic())) {
+        Logger::Log(Logger::INFO, "Client " + senderId + " Subscribed to " + header.topic());
       }
       return;
     }
 
     if (key == Keys::UNSUBSCRIBE) {
-      if (m_subscriptions.unsubscribe(senderId, msg.topic())) {
-        Logger::Log(Logger::INFO, "Client " + senderId + " Unsubscribed from " + msg.topic());
+      if (m_subscriptions.unsubscribe(senderId, header.topic())) {
+        Logger::Log(Logger::INFO, "Client " + senderId + " Unsubscribed from " + header.topic());
       }
       return;
     }
@@ -235,28 +235,30 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
     }
   }
 
-  // If msg has no ID (fresh from client), give it one.
-  if (msg.message_uuid().empty()) {
-    msg.set_message_uuid(generateUUID());
-    msg.set_origin_broker_id(m_brokerId);
+  // If the header has no ID (fresh from client), give it one.
+  if (header.message_uuid().empty()) {
+    header.set_message_uuid(generateUUID());
+    header.set_origin_broker_id(m_brokerId);
   }
 
   // Check if we've handled this UUID before (Loop protection)
-  if (isDuplicate(msg.message_uuid())) {
+  if (isDuplicate(header.message_uuid())) {
     return;  // Drop it, we've seen it.
   }
 
+  // Serialized once here (after UUID stamping) and reused for every recipient;
+  // the payload frame is forwarded verbatim, never re-encoded.
+  const std::string headerBytes = header.SerializeAsString();
+
   // Local subscribers
   {
-    const std::vector<std::string>* exactSubs = m_subscriptions.subscribersOf(msg.topic());
+    const std::vector<std::string>* exactSubs = m_subscriptions.subscribersOf(header.topic());
 
     // An empty-topic subscription is a wildcard: it receives every topic.
     // Peer links rely on this (connectToPeer subscribes to "").
-    const std::vector<std::string>* wildcardSubs = msg.topic().empty() ? nullptr : m_subscriptions.subscribersOf("");
+    const std::vector<std::string>* wildcardSubs = header.topic().empty() ? nullptr : m_subscriptions.subscribersOf("");
 
     if (exactSubs || wildcardSubs) {
-      zmq::message_t outData = createZmqMsg(msg);
-
       auto deliver = [&](const std::string& id) {
         // Don't echo back to sender if it's a local client
         if (!isFromPeer && id == senderId) {
@@ -268,7 +270,7 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
           return;
         }
 
-        sendToClient(socket, id, outData);
+        sendToClient(socket, id, headerBytes, payload);
       };
 
       if (exactSubs) {
@@ -293,7 +295,10 @@ void ZmqBroker::processMessage(zmq::socket_t& socket,
   {
     std::lock_guard<std::mutex> lock(m_peersMutex);
     for (auto& peer : m_peers) {
-      peer->writeMessage(msg);
+      Envelope fwd;
+      fwd.header = header;
+      fwd.payload = payload;
+      peer->writeMessage(fwd);
     }
   }
 }
@@ -343,20 +348,25 @@ void ZmqBroker::broadcastStats(zmq::socket_t& socket, zmq::socket_t& inspectorSo
     }
   }
 
-  broker::BrokerPayload envelope;
-  envelope.set_handler_key(Keys::SYS_STATS);
-  envelope.set_topic(Keys::SYS_STATS);
-  envelope.set_sender_id("BROKER_SYSTEM");
-  envelope.mutable_payload()->PackFrom(stats);  // Use Any to pack the struct natively
+  broker::MessageHeader header;
+  header.set_handler_key(Keys::SYS_STATS);
+  header.set_topic(Keys::SYS_STATS);
+  header.set_sender_id("BROKER_SYSTEM");
+
+  // Packed into an Any so subscribing clients decode it through the same path as
+  // any other protobuf payload (ConnectionManager's tryUnpack).
+  google::protobuf::Any any;
+  any.PackFrom(stats);
+  const std::string payload = any.SerializeAsString();
+  const std::string headerBytes = header.SerializeAsString();
 
   const std::string sysStatsKey(Keys::SYS_STATS);
 
-  zmq::message_t msg = createZmqMsg(envelope);
-  inspectorSocket.send(msg, zmq::send_flags::dontwait);
+  wire::send(inspectorSocket, header, payload);
 
   if (const auto* subs = m_subscriptions.subscribersOf(sysStatsKey)) {
     for (const auto& id : *subs) {
-      sendToClient(socket, id, msg);
+      sendToClient(socket, id, headerBytes, payload);
     }
   }
 }
@@ -368,20 +378,20 @@ void ZmqBroker::connectToPeer(const std::string& peerAddress) {
 
   auto worker = std::make_unique<ZmqWorker>(config, nullptr, nullptr);
   ZmqWorker* link = worker.get();
-  worker->setMessageCallback([this, link, linkId = config.clientId](const broker::BrokerPayload& msg) {
+  worker->setMessageCallback([this, link, linkId = config.clientId](const Envelope& env) {
     // The remote broker answers our first message (and any reappearance after
     // it has timed us out) with a RESET request instead of processing it. The
     // wildcard subscription must be (re-)sent in response, or the remote will
     // never route anything to this link.
-    if (msg.handler_key() == Keys::RESET) {
-      broker::BrokerPayload sub;
-      sub.set_handler_key(Keys::SUBSCRIBE);
-      sub.set_sender_id(linkId);
-      sub.set_topic("");  // Empty topic = wildcard, see processMessage
+    if (env.header.handler_key() == Keys::RESET) {
+      Envelope sub;
+      sub.header.set_handler_key(Keys::SUBSCRIBE);
+      sub.header.set_sender_id(linkId);
+      sub.header.set_topic("");  // Empty topic = wildcard, see processMessage
       link->writeControlMessage(sub);
       return;
     }
-    m_peerInboundQueue.push(msg);
+    m_peerInboundQueue.push(env);
   });
   worker->start();
 

@@ -26,6 +26,53 @@ namespace _pbi = ::google::protobuf::internal;
 namespace _fl = ::google::protobuf::internal::field_layout;
 namespace broker {
 
+inline constexpr MessageHeader::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        handler_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        sender_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        topic_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        origin_broker_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        message_uuid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        transfer_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        reply_topic_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        sequence_number_{0},
+        sequence_count_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR MessageHeader::MessageHeader(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(MessageHeader_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct MessageHeaderDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR MessageHeaderDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~MessageHeaderDefaultTypeInternal() {}
+  union {
+    MessageHeader _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 MessageHeaderDefaultTypeInternal _MessageHeader_default_instance_;
+
 inline constexpr ClientInfo::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
@@ -87,57 +134,6 @@ struct SystemStatsDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SystemStatsDefaultTypeInternal _SystemStats_default_instance_;
-
-inline constexpr BrokerPayload::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        handler_key_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        sender_id_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        topic_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        origin_broker_id_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        message_uuid_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        transfer_id_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        raw_data_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        reply_topic_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        payload_{nullptr},
-        sequence_number_{0},
-        sequence_count_{0} {}
-
-template <typename>
-PROTOBUF_CONSTEXPR BrokerPayload::BrokerPayload(::_pbi::ConstantInitialized)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(BrokerPayload_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
-}
-struct BrokerPayloadDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR BrokerPayloadDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~BrokerPayloadDefaultTypeInternal() {}
-  union {
-    BrokerPayload _instance;
-  };
-};
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BrokerPayloadDefaultTypeInternal _BrokerPayload_default_instance_;
 }  // namespace broker
 static constexpr const ::_pb::EnumDescriptor *PROTOBUF_NONNULL *PROTOBUF_NULLABLE
     file_level_enum_descriptors_broker_2eproto = nullptr;
@@ -147,30 +143,26 @@ const ::uint32_t
     TableStruct_broker_2eproto::offsets[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
         protodesc_cold) = {
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_._has_bits_),
-        14, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.handler_key_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.sender_id_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.topic_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.payload_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.origin_broker_id_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.message_uuid_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.transfer_id_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.sequence_number_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.sequence_count_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.raw_data_),
-        PROTOBUF_FIELD_OFFSET(::broker::BrokerPayload, _impl_.reply_topic_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_._has_bits_),
+        12, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.handler_key_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.sender_id_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.topic_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.origin_broker_id_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.message_uuid_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.transfer_id_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.sequence_number_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.sequence_count_),
+        PROTOBUF_FIELD_OFFSET(::broker::MessageHeader, _impl_.reply_topic_),
         0,
         1,
         2,
-        8,
         3,
         4,
         5,
-        9,
-        10,
-        6,
         7,
+        8,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::broker::ClientInfo, _impl_._has_bits_),
         5, // hasbit index offset
@@ -201,49 +193,41 @@ const ::uint32_t
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-        {0, sizeof(::broker::BrokerPayload)},
-        {25, sizeof(::broker::ClientInfo)},
-        {32, sizeof(::broker::SystemStats)},
+        {0, sizeof(::broker::MessageHeader)},
+        {21, sizeof(::broker::ClientInfo)},
+        {28, sizeof(::broker::SystemStats)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
-    &::broker::_BrokerPayload_default_instance_._instance,
+    &::broker::_MessageHeader_default_instance_._instance,
     &::broker::_ClientInfo_default_instance_._instance,
     &::broker::_SystemStats_default_instance_._instance,
 };
 const char descriptor_table_protodef_broker_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\014broker.proto\022\006broker\032\031google/protobuf/"
-    "any.proto\"\212\002\n\rBrokerPayload\022\023\n\013handler_k"
-    "ey\030\001 \001(\t\022\021\n\tsender_id\030\002 \001(\t\022\r\n\005topic\030\003 \001"
-    "(\t\022%\n\007payload\030\004 \001(\0132\024.google.protobuf.An"
-    "y\022\030\n\020origin_broker_id\030\005 \001(\t\022\024\n\014message_u"
-    "uid\030\006 \001(\t\022\023\n\013transfer_id\030\007 \001(\t\022\027\n\017sequen"
-    "ce_number\030\010 \001(\005\022\026\n\016sequence_count\030\t \001(\005\022"
-    "\020\n\010raw_data\030\n \001(\014\022\023\n\013reply_topic\030\013 \001(\t\"/"
-    "\n\nClientInfo\022\n\n\002id\030\001 \001(\t\022\025\n\rsubscription"
-    "s\030\002 \003(\t\"\315\001\n\013SystemStats\022\021\n\tbroker_id\030\001 \001"
-    "(\t\022\025\n\rclients_count\030\002 \001(\005\022\023\n\013peers_count"
-    "\030\003 \001(\005\022\024\n\014msgs_per_sec\030\004 \001(\005\022\022\n\nkb_per_s"
-    "ec\030\005 \001(\001\022\022\n\ntotal_msgs\030\006 \001(\003\022\022\n\nuptime_s"
-    "ec\030\007 \001(\003\022-\n\021connected_clients\030\010 \003(\0132\022.br"
-    "oker.ClientInfo2R\n\rBrokerService\022A\n\rMess"
-    "ageStream\022\025.broker.BrokerPayload\032\025.broke"
-    "r.BrokerPayload(\0010\001B\003\370\001\001b\006proto3"
-};
-static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_broker_2eproto_deps[1] = {
-        &::descriptor_table_google_2fprotobuf_2fany_2eproto,
+    "\n\014broker.proto\022\006broker\"\335\001\n\rMessageHeader"
+    "\022\023\n\013handler_key\030\001 \001(\t\022\021\n\tsender_id\030\002 \001(\t"
+    "\022\r\n\005topic\030\003 \001(\t\022\030\n\020origin_broker_id\030\005 \001("
+    "\t\022\024\n\014message_uuid\030\006 \001(\t\022\023\n\013transfer_id\030\007"
+    " \001(\t\022\027\n\017sequence_number\030\010 \001(\005\022\026\n\016sequenc"
+    "e_count\030\t \001(\005\022\023\n\013reply_topic\030\013 \001(\tJ\004\010\004\020\005"
+    "J\004\010\n\020\013\"/\n\nClientInfo\022\n\n\002id\030\001 \001(\t\022\025\n\rsubs"
+    "criptions\030\002 \003(\t\"\315\001\n\013SystemStats\022\021\n\tbroke"
+    "r_id\030\001 \001(\t\022\025\n\rclients_count\030\002 \001(\005\022\023\n\013pee"
+    "rs_count\030\003 \001(\005\022\024\n\014msgs_per_sec\030\004 \001(\005\022\022\n\n"
+    "kb_per_sec\030\005 \001(\001\022\022\n\ntotal_msgs\030\006 \001(\003\022\022\n\n"
+    "uptime_sec\030\007 \001(\003\022-\n\021connected_clients\030\010 "
+    "\003(\0132\022.broker.ClientInfoB\003\370\001\001b\006proto3"
 };
 static ::absl::once_flag descriptor_table_broker_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_broker_2eproto = {
     false,
     false,
-    672,
+    516,
     descriptor_table_protodef_broker_2eproto,
     "broker.proto",
     &descriptor_table_broker_2eproto_once,
-    descriptor_table_broker_2eproto_deps,
-    1,
+    nullptr,
+    0,
     3,
     schemas,
     file_default_instances,
@@ -254,32 +238,27 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_broker_2eproto
 namespace broker {
 // ===================================================================
 
-class BrokerPayload::_Internal {
+class MessageHeader::_Internal {
  public:
   using HasBits =
-      decltype(::std::declval<BrokerPayload>()._impl_._has_bits_);
+      decltype(::std::declval<MessageHeader>()._impl_._has_bits_);
   static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_._has_bits_);
+      8 * PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_._has_bits_);
 };
 
-void BrokerPayload::clear_payload() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.payload_ != nullptr) _impl_.payload_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000100u;
-}
-BrokerPayload::BrokerPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+MessageHeader::MessageHeader(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, BrokerPayload_class_data_.base()) {
+    : ::google::protobuf::Message(arena, MessageHeader_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
   SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:broker.BrokerPayload)
+  // @@protoc_insertion_point(arena_constructor:broker.MessageHeader)
 }
-PROTOBUF_NDEBUG_INLINE BrokerPayload::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE MessageHeader::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    const ::broker::BrokerPayload& from_msg)
+    const ::broker::MessageHeader& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         handler_key_(arena, from.handler_key_),
@@ -288,26 +267,21 @@ PROTOBUF_NDEBUG_INLINE BrokerPayload::Impl_::Impl_(
         origin_broker_id_(arena, from.origin_broker_id_),
         message_uuid_(arena, from.message_uuid_),
         transfer_id_(arena, from.transfer_id_),
-        raw_data_(arena, from.raw_data_),
         reply_topic_(arena, from.reply_topic_) {}
 
-BrokerPayload::BrokerPayload(
+MessageHeader::MessageHeader(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const BrokerPayload& from)
+    const MessageHeader& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, BrokerPayload_class_data_.base()) {
+    : ::google::protobuf::Message(arena, MessageHeader_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  BrokerPayload* const _this = this;
+  MessageHeader* const _this = this;
   (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.payload_ = ((cached_has_bits & 0x00000100u) != 0)
-                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_)
-                : nullptr;
   ::memcpy(reinterpret_cast<char *>(&_impl_) +
                offsetof(Impl_, sequence_number_),
            reinterpret_cast<const char *>(&from._impl_) +
@@ -316,9 +290,9 @@ BrokerPayload::BrokerPayload(
                offsetof(Impl_, sequence_number_) +
                sizeof(Impl_::sequence_count_));
 
-  // @@protoc_insertion_point(copy_constructor:broker.BrokerPayload)
+  // @@protoc_insertion_point(copy_constructor:broker.MessageHeader)
 }
-PROTOBUF_NDEBUG_INLINE BrokerPayload::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE MessageHeader::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
@@ -328,24 +302,23 @@ PROTOBUF_NDEBUG_INLINE BrokerPayload::Impl_::Impl_(
         origin_broker_id_(arena),
         message_uuid_(arena),
         transfer_id_(arena),
-        raw_data_(arena),
         reply_topic_(arena) {}
 
-inline void BrokerPayload::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+inline void MessageHeader::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char *>(&_impl_) +
-               offsetof(Impl_, payload_),
+               offsetof(Impl_, sequence_number_),
            0,
            offsetof(Impl_, sequence_count_) -
-               offsetof(Impl_, payload_) +
+               offsetof(Impl_, sequence_number_) +
                sizeof(Impl_::sequence_count_));
 }
-BrokerPayload::~BrokerPayload() {
-  // @@protoc_insertion_point(destructor:broker.BrokerPayload)
+MessageHeader::~MessageHeader() {
+  // @@protoc_insertion_point(destructor:broker.MessageHeader)
   SharedDtor(*this);
 }
-inline void BrokerPayload::SharedDtor(MessageLite& self) {
-  BrokerPayload& this_ = static_cast<BrokerPayload&>(self);
+inline void MessageHeader::SharedDtor(MessageLite& self) {
+  MessageHeader& this_ = static_cast<MessageHeader&>(self);
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.handler_key_.Destroy();
@@ -354,108 +327,102 @@ inline void BrokerPayload::SharedDtor(MessageLite& self) {
   this_._impl_.origin_broker_id_.Destroy();
   this_._impl_.message_uuid_.Destroy();
   this_._impl_.transfer_id_.Destroy();
-  this_._impl_.raw_data_.Destroy();
   this_._impl_.reply_topic_.Destroy();
-  delete this_._impl_.payload_;
   this_._impl_.~Impl_();
 }
 
-inline void* PROTOBUF_NONNULL BrokerPayload::PlacementNew_(
+inline void* PROTOBUF_NONNULL MessageHeader::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) BrokerPayload(arena);
+  return ::new (mem) MessageHeader(arena);
 }
-constexpr auto BrokerPayload::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BrokerPayload),
-                                            alignof(BrokerPayload));
+constexpr auto MessageHeader::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(MessageHeader),
+                                            alignof(MessageHeader));
 }
-constexpr auto BrokerPayload::InternalGenerateClassData_() {
+constexpr auto MessageHeader::InternalGenerateClassData_() {
   return ::google::protobuf::internal::ClassDataFull{
       ::google::protobuf::internal::ClassData{
-          &_BrokerPayload_default_instance_._instance,
+          &_MessageHeader_default_instance_._instance,
           &_table_.header,
           nullptr,  // OnDemandRegisterArenaDtor
           nullptr,  // IsInitialized
-          &BrokerPayload::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<BrokerPayload>(),
+          &MessageHeader::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MessageHeader>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &BrokerPayload::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<BrokerPayload>(), &BrokerPayload::ByteSizeLong,
-              &BrokerPayload::_InternalSerialize,
+          &MessageHeader::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MessageHeader>(), &MessageHeader::ByteSizeLong,
+              &MessageHeader::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_._cached_size_),
           false,
       },
-      &BrokerPayload::kDescriptorMethods,
+      &MessageHeader::kDescriptorMethods,
       &descriptor_table_broker_2eproto,
       nullptr,  // tracker
   };
 }
 
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull BrokerPayload_class_data_ =
-        BrokerPayload::InternalGenerateClassData_();
+    ::google::protobuf::internal::ClassDataFull MessageHeader_class_data_ =
+        MessageHeader::InternalGenerateClassData_();
 
 PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-BrokerPayload::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&BrokerPayload_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(BrokerPayload_class_data_.tc_table);
-  return BrokerPayload_class_data_.base();
+MessageHeader::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MessageHeader_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MessageHeader_class_data_.tc_table);
+  return MessageHeader_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<4, 11, 1, 112, 2>
-BrokerPayload::_table_ = {
+const ::_pbi::TcParseTable<4, 9, 0, 112, 2>
+MessageHeader::_table_ = {
   {
-    PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_._has_bits_),
+    PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_._has_bits_),
     0, // no _extensions_
     11, 120,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294965248,  // skipmap
+    4294965768,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    11,  // num_field_entries
-    1,  // num_aux_entries
-    offsetof(decltype(_table_), aux_entries),
-    BrokerPayload_class_data_.base(),
+    9,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    MessageHeader_class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
     #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-    ::_pbi::TcParser::GetTable<::broker::BrokerPayload>(),  // to_prefetch
+    ::_pbi::TcParser::GetTable<::broker::MessageHeader>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
     // string handler_key = 1;
     {::_pbi::TcParser::FastUS1,
-     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.handler_key_)}},
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.handler_key_)}},
     // string sender_id = 2;
     {::_pbi::TcParser::FastUS1,
-     {18, 1, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.sender_id_)}},
+     {18, 1, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sender_id_)}},
     // string topic = 3;
     {::_pbi::TcParser::FastUS1,
-     {26, 2, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.topic_)}},
-    // .google.protobuf.Any payload = 4;
-    {::_pbi::TcParser::FastMtS1,
-     {34, 8, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.payload_)}},
+     {26, 2, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.topic_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // string origin_broker_id = 5;
     {::_pbi::TcParser::FastUS1,
-     {42, 3, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.origin_broker_id_)}},
+     {42, 3, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.origin_broker_id_)}},
     // string message_uuid = 6;
     {::_pbi::TcParser::FastUS1,
-     {50, 4, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.message_uuid_)}},
+     {50, 4, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.message_uuid_)}},
     // string transfer_id = 7;
     {::_pbi::TcParser::FastUS1,
-     {58, 5, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.transfer_id_)}},
+     {58, 5, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.transfer_id_)}},
     // int32 sequence_number = 8;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BrokerPayload, _impl_.sequence_number_), 9>(),
-     {64, 9, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.sequence_number_)}},
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MessageHeader, _impl_.sequence_number_), 7>(),
+     {64, 7, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sequence_number_)}},
     // int32 sequence_count = 9;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BrokerPayload, _impl_.sequence_count_), 10>(),
-     {72, 10, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.sequence_count_)}},
-    // bytes raw_data = 10;
-    {::_pbi::TcParser::FastBS1,
-     {82, 6, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.raw_data_)}},
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MessageHeader, _impl_.sequence_count_), 8>(),
+     {72, 8, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sequence_count_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // string reply_topic = 11;
     {::_pbi::TcParser::FastUS1,
-     {90, 7, 0, PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.reply_topic_)}},
+     {90, 6, 0, PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.reply_topic_)}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
@@ -464,45 +431,37 @@ BrokerPayload::_table_ = {
     65535, 65535
   }}, {{
     // string handler_key = 1;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.handler_key_), _Internal::kHasBitsOffset + 0, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.handler_key_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string sender_id = 2;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.sender_id_), _Internal::kHasBitsOffset + 1, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sender_id_), _Internal::kHasBitsOffset + 1, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string topic = 3;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.topic_), _Internal::kHasBitsOffset + 2, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.topic_), _Internal::kHasBitsOffset + 2, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // .google.protobuf.Any payload = 4;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.payload_), _Internal::kHasBitsOffset + 8, 0,
-    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     // string origin_broker_id = 5;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.origin_broker_id_), _Internal::kHasBitsOffset + 3, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.origin_broker_id_), _Internal::kHasBitsOffset + 3, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string message_uuid = 6;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.message_uuid_), _Internal::kHasBitsOffset + 4, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.message_uuid_), _Internal::kHasBitsOffset + 4, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string transfer_id = 7;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.transfer_id_), _Internal::kHasBitsOffset + 5, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.transfer_id_), _Internal::kHasBitsOffset + 5, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // int32 sequence_number = 8;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.sequence_number_), _Internal::kHasBitsOffset + 9, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sequence_number_), _Internal::kHasBitsOffset + 7, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     // int32 sequence_count = 9;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.sequence_count_), _Internal::kHasBitsOffset + 10, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sequence_count_), _Internal::kHasBitsOffset + 8, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-    // bytes raw_data = 10;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.raw_data_), _Internal::kHasBitsOffset + 6, 0,
-    (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     // string reply_topic = 11;
-    {PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.reply_topic_), _Internal::kHasBitsOffset + 7, 0,
+    {PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.reply_topic_), _Internal::kHasBitsOffset + 6, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
+  // no aux_entries
   {{
-      {::_pbi::TcParser::GetTable<::google::protobuf::Any>()},
-  }},
-  {{
-    "\24\13\11\5\0\20\14\13\0\0\0\13\0\0\0\0"
-    "broker.BrokerPayload"
+    "\24\13\11\5\20\14\13\0\0\13\0\0\0\0\0\0"
+    "broker.MessageHeader"
     "handler_key"
     "sender_id"
     "topic"
@@ -512,15 +471,15 @@ BrokerPayload::_table_ = {
     "reply_topic"
   }},
 };
-PROTOBUF_NOINLINE void BrokerPayload::Clear() {
-// @@protoc_insertion_point(message_clear_start:broker.BrokerPayload)
+PROTOBUF_NOINLINE void MessageHeader::Clear() {
+// @@protoc_insertion_point(message_clear_start:broker.MessageHeader)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   ::uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if ((cached_has_bits & 0x000000ffu) != 0) {
+  if ((cached_has_bits & 0x0000007fu) != 0) {
     if ((cached_has_bits & 0x00000001u) != 0) {
       _impl_.handler_key_.ClearNonDefaultToEmpty();
     }
@@ -540,37 +499,27 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
       _impl_.transfer_id_.ClearNonDefaultToEmpty();
     }
     if ((cached_has_bits & 0x00000040u) != 0) {
-      _impl_.raw_data_.ClearNonDefaultToEmpty();
-    }
-    if ((cached_has_bits & 0x00000080u) != 0) {
       _impl_.reply_topic_.ClearNonDefaultToEmpty();
     }
   }
-  if ((cached_has_bits & 0x00000100u) != 0) {
-    ABSL_DCHECK(_impl_.payload_ != nullptr);
-    _impl_.payload_->Clear();
-  }
-  if ((cached_has_bits & 0x00000600u) != 0) {
-    ::memset(&_impl_.sequence_number_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.sequence_count_) -
-        reinterpret_cast<char*>(&_impl_.sequence_number_)) + sizeof(_impl_.sequence_count_));
-  }
+  _impl_.sequence_number_ = 0;
+  _impl_.sequence_count_ = 0;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL BrokerPayload::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL MessageHeader::_InternalSerialize(
     const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const BrokerPayload& this_ = static_cast<const BrokerPayload&>(base);
+  const MessageHeader& this_ = static_cast<const MessageHeader&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL BrokerPayload::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL MessageHeader::_InternalSerialize(
     ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const BrokerPayload& this_ = *this;
+  const MessageHeader& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(serialize_to_array_start:broker.BrokerPayload)
+  // @@protoc_insertion_point(serialize_to_array_start:broker.MessageHeader)
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
@@ -579,7 +528,7 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
     if (!this_._internal_handler_key().empty()) {
       const ::std::string& _s = this_._internal_handler_key();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.BrokerPayload.handler_key");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.MessageHeader.handler_key");
       target = stream->WriteStringMaybeAliased(1, _s, target);
     }
   }
@@ -589,7 +538,7 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
     if (!this_._internal_sender_id().empty()) {
       const ::std::string& _s = this_._internal_sender_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.BrokerPayload.sender_id");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.MessageHeader.sender_id");
       target = stream->WriteStringMaybeAliased(2, _s, target);
     }
   }
@@ -599,51 +548,43 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
     if (!this_._internal_topic().empty()) {
       const ::std::string& _s = this_._internal_topic();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.BrokerPayload.topic");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.MessageHeader.topic");
       target = stream->WriteStringMaybeAliased(3, _s, target);
     }
   }
 
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // .google.protobuf.Any payload = 4;
-  if ((cached_has_bits & 0x00000100u) != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-        4, *this_._impl_.payload_, this_._impl_.payload_->GetCachedSize(), target,
-        stream);
-  }
-
   // string origin_broker_id = 5;
-  if ((cached_has_bits & 0x00000008u) != 0) {
+  if ((this_._impl_._has_bits_[0] & 0x00000008u) != 0) {
     if (!this_._internal_origin_broker_id().empty()) {
       const ::std::string& _s = this_._internal_origin_broker_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.BrokerPayload.origin_broker_id");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.MessageHeader.origin_broker_id");
       target = stream->WriteStringMaybeAliased(5, _s, target);
     }
   }
 
   // string message_uuid = 6;
-  if ((cached_has_bits & 0x00000010u) != 0) {
+  if ((this_._impl_._has_bits_[0] & 0x00000010u) != 0) {
     if (!this_._internal_message_uuid().empty()) {
       const ::std::string& _s = this_._internal_message_uuid();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.BrokerPayload.message_uuid");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.MessageHeader.message_uuid");
       target = stream->WriteStringMaybeAliased(6, _s, target);
     }
   }
 
   // string transfer_id = 7;
-  if ((cached_has_bits & 0x00000020u) != 0) {
+  if ((this_._impl_._has_bits_[0] & 0x00000020u) != 0) {
     if (!this_._internal_transfer_id().empty()) {
       const ::std::string& _s = this_._internal_transfer_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.BrokerPayload.transfer_id");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.MessageHeader.transfer_id");
       target = stream->WriteStringMaybeAliased(7, _s, target);
     }
   }
 
   // int32 sequence_number = 8;
-  if ((cached_has_bits & 0x00000200u) != 0) {
+  if ((this_._impl_._has_bits_[0] & 0x00000080u) != 0) {
     if (this_._internal_sequence_number() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<8>(
@@ -652,7 +593,7 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
   }
 
   // int32 sequence_count = 9;
-  if ((cached_has_bits & 0x00000400u) != 0) {
+  if ((this_._impl_._has_bits_[0] & 0x00000100u) != 0) {
     if (this_._internal_sequence_count() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<9>(
@@ -660,20 +601,12 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
     }
   }
 
-  // bytes raw_data = 10;
-  if ((cached_has_bits & 0x00000040u) != 0) {
-    if (!this_._internal_raw_data().empty()) {
-      const ::std::string& _s = this_._internal_raw_data();
-      target = stream->WriteBytesMaybeAliased(10, _s, target);
-    }
-  }
-
   // string reply_topic = 11;
-  if ((cached_has_bits & 0x00000080u) != 0) {
+  if ((this_._impl_._has_bits_[0] & 0x00000040u) != 0) {
     if (!this_._internal_reply_topic().empty()) {
       const ::std::string& _s = this_._internal_reply_topic();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.BrokerPayload.reply_topic");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "broker.MessageHeader.reply_topic");
       target = stream->WriteStringMaybeAliased(11, _s, target);
     }
   }
@@ -683,18 +616,18 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
             this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
   }
-  // @@protoc_insertion_point(serialize_to_array_end:broker.BrokerPayload)
+  // @@protoc_insertion_point(serialize_to_array_end:broker.MessageHeader)
   return target;
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t BrokerPayload::ByteSizeLong(const MessageLite& base) {
-  const BrokerPayload& this_ = static_cast<const BrokerPayload&>(base);
+::size_t MessageHeader::ByteSizeLong(const MessageLite& base) {
+  const MessageHeader& this_ = static_cast<const MessageHeader&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::size_t BrokerPayload::ByteSizeLong() const {
-  const BrokerPayload& this_ = *this;
+::size_t MessageHeader::ByteSizeLong() const {
+  const MessageHeader& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:broker.BrokerPayload)
+  // @@protoc_insertion_point(message_byte_size_start:broker.MessageHeader)
   ::size_t total_size = 0;
 
   ::uint32_t cached_has_bits = 0;
@@ -746,36 +679,24 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
                                         this_._internal_transfer_id());
       }
     }
-    // bytes raw_data = 10;
-    if ((cached_has_bits & 0x00000040u) != 0) {
-      if (!this_._internal_raw_data().empty()) {
-        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
-                                        this_._internal_raw_data());
-      }
-    }
     // string reply_topic = 11;
-    if ((cached_has_bits & 0x00000080u) != 0) {
+    if ((cached_has_bits & 0x00000040u) != 0) {
       if (!this_._internal_reply_topic().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_reply_topic());
       }
     }
-  }
-  if ((cached_has_bits & 0x00000700u) != 0) {
-    // .google.protobuf.Any payload = 4;
-    if ((cached_has_bits & 0x00000100u) != 0) {
-      total_size += 1 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_);
-    }
     // int32 sequence_number = 8;
-    if ((cached_has_bits & 0x00000200u) != 0) {
+    if ((cached_has_bits & 0x00000080u) != 0) {
       if (this_._internal_sequence_number() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_sequence_number());
       }
     }
+  }
+   {
     // int32 sequence_count = 9;
-    if ((cached_has_bits & 0x00000400u) != 0) {
+    if ((cached_has_bits & 0x00000100u) != 0) {
       if (this_._internal_sequence_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_sequence_count());
@@ -786,11 +707,10 @@ PROTOBUF_NOINLINE void BrokerPayload::Clear() {
                                              &this_._impl_._cached_size_);
 }
 
-void BrokerPayload::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
-  auto* const _this = static_cast<BrokerPayload*>(&to_msg);
-  auto& from = static_cast<const BrokerPayload&>(from_msg);
-  ::google::protobuf::Arena* arena = _this->GetArena();
-  // @@protoc_insertion_point(class_specific_merge_from_start:broker.BrokerPayload)
+void MessageHeader::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<MessageHeader*>(&to_msg);
+  auto& from = static_cast<const MessageHeader&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:broker.MessageHeader)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
@@ -852,15 +772,6 @@ void BrokerPayload::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::g
       }
     }
     if ((cached_has_bits & 0x00000040u) != 0) {
-      if (!from._internal_raw_data().empty()) {
-        _this->_internal_set_raw_data(from._internal_raw_data());
-      } else {
-        if (_this->_impl_.raw_data_.IsDefault()) {
-          _this->_internal_set_raw_data("");
-        }
-      }
-    }
-    if ((cached_has_bits & 0x00000080u) != 0) {
       if (!from._internal_reply_topic().empty()) {
         _this->_internal_set_reply_topic(from._internal_reply_topic());
       } else {
@@ -869,40 +780,30 @@ void BrokerPayload::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::g
         }
       }
     }
-  }
-  if ((cached_has_bits & 0x00000700u) != 0) {
-    if ((cached_has_bits & 0x00000100u) != 0) {
-      ABSL_DCHECK(from._impl_.payload_ != nullptr);
-      if (_this->_impl_.payload_ == nullptr) {
-        _this->_impl_.payload_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_);
-      } else {
-        _this->_impl_.payload_->MergeFrom(*from._impl_.payload_);
-      }
-    }
-    if ((cached_has_bits & 0x00000200u) != 0) {
+    if ((cached_has_bits & 0x00000080u) != 0) {
       if (from._internal_sequence_number() != 0) {
         _this->_impl_.sequence_number_ = from._impl_.sequence_number_;
       }
     }
-    if ((cached_has_bits & 0x00000400u) != 0) {
-      if (from._internal_sequence_count() != 0) {
-        _this->_impl_.sequence_count_ = from._impl_.sequence_count_;
-      }
+  }
+  if ((cached_has_bits & 0x00000100u) != 0) {
+    if (from._internal_sequence_count() != 0) {
+      _this->_impl_.sequence_count_ = from._impl_.sequence_count_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
-void BrokerPayload::CopyFrom(const BrokerPayload& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:broker.BrokerPayload)
+void MessageHeader::CopyFrom(const MessageHeader& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:broker.MessageHeader)
   if (&from == this) return;
   Clear();
   MergeFrom(from);
 }
 
 
-void BrokerPayload::InternalSwap(BrokerPayload* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+void MessageHeader::InternalSwap(MessageHeader* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   auto* arena = GetArena();
   ABSL_DCHECK_EQ(arena, other->GetArena());
@@ -914,17 +815,16 @@ void BrokerPayload::InternalSwap(BrokerPayload* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.origin_broker_id_, &other->_impl_.origin_broker_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.message_uuid_, &other->_impl_.message_uuid_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.transfer_id_, &other->_impl_.transfer_id_, arena);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.raw_data_, &other->_impl_.raw_data_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reply_topic_, &other->_impl_.reply_topic_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.sequence_count_)
-      + sizeof(BrokerPayload::_impl_.sequence_count_)
-      - PROTOBUF_FIELD_OFFSET(BrokerPayload, _impl_.payload_)>(
-          reinterpret_cast<char*>(&_impl_.payload_),
-          reinterpret_cast<char*>(&other->_impl_.payload_));
+      PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sequence_count_)
+      + sizeof(MessageHeader::_impl_.sequence_count_)
+      - PROTOBUF_FIELD_OFFSET(MessageHeader, _impl_.sequence_number_)>(
+          reinterpret_cast<char*>(&_impl_.sequence_number_),
+          reinterpret_cast<char*>(&other->_impl_.sequence_number_));
 }
 
-::google::protobuf::Metadata BrokerPayload::GetMetadata() const {
+::google::protobuf::Metadata MessageHeader::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

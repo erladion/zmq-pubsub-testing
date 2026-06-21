@@ -14,6 +14,7 @@
 #include "zmqworker.h"
 #include "safequeue.h"
 #include "subscriptionregistry.h"
+#include "wireframe.h"
 
 #include "broker.pb.h"
 
@@ -37,7 +38,7 @@ public:
 
 private:
   void run(const std::vector<std::string>& addresses);
-  void processMessage(zmq::socket_t &socket, zmq::socket_t &inspectorSocket, broker::BrokerPayload &msg, const std::string &senderId, bool isFromPeer);
+  void processMessage(zmq::socket_t &socket, zmq::socket_t &inspectorSocket, broker::MessageHeader &header, const std::string &payload, const std::string &senderId, bool isFromPeer);
   bool isDuplicate(const std::string& uuid);
 
   void broadcastStats(zmq::socket_t &socket, zmq::socket_t &inspectorSocket);
@@ -63,7 +64,7 @@ private:
   std::mutex m_peersMutex;
   std::vector<std::unique_ptr<ZmqWorker>> m_peers;
 
-  SafeQueue<broker::BrokerPayload> m_peerInboundQueue;
+  SafeQueue<Envelope> m_peerInboundQueue;
 
   std::unordered_set<std::string> m_seenMessageIds;
   std::deque<std::string> m_messageIdOrder;

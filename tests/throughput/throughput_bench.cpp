@@ -28,6 +28,7 @@
 #include "broker.pb.h"
 #include "config.h"
 #include "safequeue.h"
+#include "wireframe.h"
 #include "zmqbroker.h"
 #include "zmqworker.h"
 
@@ -121,9 +122,9 @@ std::string makeTimestampedPayload(int size) {
   return data;
 }
 
-std::chrono::nanoseconds latencySince(const broker::BrokerPayload& msg) {
+std::chrono::nanoseconds latencySince(const Envelope& msg) {
   int64_t sendNanos = 0;
-  std::memcpy(&sendNanos, msg.raw_data().data(), sizeof(sendNanos));
+  std::memcpy(&sendNanos, msg.payload.data(), sizeof(sendNanos));
   const auto sendTime = std::chrono::steady_clock::time_point(std::chrono::nanoseconds(sendNanos));
   return std::chrono::steady_clock::now() - sendTime;
 }
@@ -135,24 +136,24 @@ std::chrono::nanoseconds latencySince(const broker::BrokerPayload& msg) {
 // enough, since a stale probe from an earlier retry can land late and get
 // mistaken for real load traffic once the measurement window starts.
 bool waitForSubscriptionsActive(ZmqWorker& probePublisher, const std::string& probeSenderId, std::vector<std::unique_ptr<ZmqWorker>>& subscribers,
-                                std::vector<std::unique_ptr<SafeQueue<broker::BrokerPayload>>>& inboundQueues, const std::vector<std::string>& subscriberIds) {
+                                std::vector<std::unique_ptr<SafeQueue<Envelope>>>& inboundQueues, const std::vector<std::string>& subscriberIds) {
   for (int attempt = 0; attempt < 60; ++attempt) {
     const std::string nonce = "ready-" + std::to_string(attempt);
 
-    broker::BrokerPayload probe;
-    probe.set_handler_key("PROBE");
-    probe.set_sender_id(probeSenderId);
-    probe.set_topic(kTopic);
-    probe.set_raw_data(nonce);
+    Envelope probe;
+    probe.header.set_handler_key("PROBE");
+    probe.header.set_sender_id(probeSenderId);
+    probe.header.set_topic(kTopic);
+    probe.payload = nonce;
     probePublisher.writeMessage(probe);
 
     std::vector<bool> seen(subscribers.size(), false);
     const auto deadline = std::chrono::steady_clock::now() + 200ms;
     while (std::chrono::steady_clock::now() < deadline) {
       for (std::size_t i = 0; i < inboundQueues.size(); ++i) {
-        broker::BrokerPayload received;
+        Envelope received;
         while (inboundQueues[i]->try_pop(received)) {
-          if (received.handler_key() == "PROBE" && received.raw_data() == nonce) {
+          if (received.header.handler_key() == "PROBE" && received.payload == nonce) {
             seen[i] = true;
           }
         }
@@ -162,7 +163,7 @@ bool waitForSubscriptionsActive(ZmqWorker& probePublisher, const std::string& pr
         // RESETs, ...) land, then wipe the slate clean before measuring.
         std::this_thread::sleep_for(250ms);
         for (auto& queue : inboundQueues) {
-          broker::BrokerPayload discard;
+          Envelope discard;
           while (queue->try_pop(discard)) {
           }
         }
@@ -198,13 +199,13 @@ PublisherResult runPublisher(ZmqWorker& worker, std::string senderId, int payloa
     // never tagged "measure" without also being counted as sent (or vice versa).
     const bool measuring = recording.load(std::memory_order_relaxed);
 
-    broker::BrokerPayload msg;
-    msg.set_handler_key("LOAD");
-    msg.set_sender_id(senderId);
-    msg.set_topic(kTopic);
-    msg.set_sequence_number(sequence++);
-    msg.set_transfer_id(measuring ? kMeasureTag : kWarmupTag);
-    msg.set_raw_data(makeTimestampedPayload(payloadBytes));
+    Envelope msg;
+    msg.header.set_handler_key("LOAD");
+    msg.header.set_sender_id(senderId);
+    msg.header.set_topic(kTopic);
+    msg.header.set_sequence_number(sequence++);
+    msg.header.set_transfer_id(measuring ? kMeasureTag : kWarmupTag);
+    msg.payload = makeTimestampedPayload(payloadBytes);
 
     const bool enqueued = worker.writeMessage(msg);
     if (measuring) {
@@ -231,15 +232,16 @@ struct SubscriberResult {
 // the run ends) so idle polling doesn't add jitter to the latency numbers.
 // Only "measure"-tagged LOAD messages are recorded - see the kWarmupTag /
 // kMeasureTag comment for why that decision is made by the sender, not here.
-SubscriberResult runSubscriber(SafeQueue<broker::BrokerPayload>& queue) {
+SubscriberResult runSubscriber(SafeQueue<Envelope>& queue) {
   SubscriberResult result;
-  broker::BrokerPayload msg;
+  Envelope msg;
 
   while (queue.pop(msg)) {
-    if (msg.handler_key() != "LOAD" || msg.transfer_id() != kMeasureTag) {
+    if (msg.header.handler_key() != "LOAD" || msg.header.transfer_id() != kMeasureTag) {
       continue;
     }
-    result.samples.push_back({std::chrono::steady_clock::now().time_since_epoch().count(), latencySince(msg).count(), static_cast<uint32_t>(msg.ByteSizeLong())});
+    const uint32_t wireBytes = static_cast<uint32_t>(msg.header.ByteSizeLong() + msg.payload.size());
+    result.samples.push_back({std::chrono::steady_clock::now().time_since_epoch().count(), latencySince(msg).count(), wireBytes});
   }
   return result;
 }
@@ -325,12 +327,12 @@ int main(int argc, char** argv) {
   broker.start({testBrokerAddress()});
   std::this_thread::sleep_for(100ms);
 
-  std::vector<std::unique_ptr<SafeQueue<broker::BrokerPayload>>> inboundQueues;
+  std::vector<std::unique_ptr<SafeQueue<Envelope>>> inboundQueues;
   std::vector<std::unique_ptr<ZmqWorker>> subscribers;
   std::vector<std::string> subscriberIds;
   for (int i = 0; i < config.subscriberCount; ++i) {
     const std::string clientId = "bench-subscriber-" + std::to_string(i);
-    auto queue = std::make_unique<SafeQueue<broker::BrokerPayload>>();
+    auto queue = std::make_unique<SafeQueue<Envelope>>();
 
     ConnectionConfig cfg;
     cfg.address = testBrokerAddress();

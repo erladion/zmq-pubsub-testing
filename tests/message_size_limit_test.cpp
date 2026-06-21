@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "safequeue.h"
+#include "wireframe.h"
 #include "zmqbroker.h"
 #include "zmqworker.h"
 
@@ -28,7 +29,7 @@ TEST(MessageSizeLimitTest, OversizedMessageIsRejectedAndBrokerSurvives) {
 
   const std::string topic = "size-limit-topic";
 
-  SafeQueue<broker::BrokerPayload> inbound;
+  SafeQueue<Envelope> inbound;
   ConnectionConfig subConfig;
   subConfig.address = testBrokerAddress();
   subConfig.clientId = "size-limit-subscriber";
@@ -46,29 +47,29 @@ TEST(MessageSizeLimitTest, OversizedMessageIsRejectedAndBrokerSurvives) {
 
   const size_t oversize = static_cast<size_t>(MAX_MESSAGE_SIZE_BYTES) + 1024 * 1024;
 
-  broker::BrokerPayload received;
+  Envelope received;
   bool gotSmall = false;
   bool sawOversized = false;
   for (int attempt = 0; attempt < 30 && !gotSmall; ++attempt) {
-    broker::BrokerPayload bigMsg;
-    bigMsg.set_handler_key("size-limit-data");
-    bigMsg.set_sender_id(pubConfig.clientId);
-    bigMsg.set_topic(topic);
-    bigMsg.set_raw_data(std::string(oversize, 'x'));
+    Envelope bigMsg;
+    bigMsg.header.set_handler_key("size-limit-data");
+    bigMsg.header.set_sender_id(pubConfig.clientId);
+    bigMsg.header.set_topic(topic);
+    bigMsg.payload = std::string(oversize, 'x');
     publisher.writeMessage(bigMsg);
 
-    broker::BrokerPayload smallMsg;
-    smallMsg.set_handler_key("size-limit-data");
-    smallMsg.set_sender_id(pubConfig.clientId);
-    smallMsg.set_topic(topic);
-    smallMsg.set_raw_data("small-and-legitimate");
+    Envelope smallMsg;
+    smallMsg.header.set_handler_key("size-limit-data");
+    smallMsg.header.set_sender_id(pubConfig.clientId);
+    smallMsg.header.set_topic(topic);
+    smallMsg.payload = "small-and-legitimate";
     publisher.writeMessage(smallMsg);
 
     while (popWithTimeout(inbound, received, 300ms)) {
-      if (received.topic() != topic) {
+      if (received.header.topic() != topic) {
         continue;
       }
-      if (received.raw_data().size() >= oversize) {
+      if (received.payload.size() >= oversize) {
         sawOversized = true;
       } else {
         gotSmall = true;
@@ -79,7 +80,7 @@ TEST(MessageSizeLimitTest, OversizedMessageIsRejectedAndBrokerSurvives) {
 
   ASSERT_TRUE(gotSmall) << "Broker stopped serving normal traffic after an oversized message";
   EXPECT_FALSE(sawOversized) << "An oversized message traversed the broker - maxmsgsize cap is not in effect";
-  EXPECT_EQ(received.raw_data(), "small-and-legitimate");
+  EXPECT_EQ(received.payload, "small-and-legitimate");
 
   publisher.stop();
   subscriberWorker.stop();

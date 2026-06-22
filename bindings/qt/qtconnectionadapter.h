@@ -33,6 +33,10 @@ struct DataSerializer<QJsonObject> {
   }
 };
 
+// Qt-facing wrapper over ConnectionManager. Topics are QString at the API edge
+// and converted to std::string internally, so callers stay in Qt types.
+// Callbacks are marshaled onto the context QObject's thread, so handlers run
+// where it is safe to touch widgets.
 class QtConnectionAdapter {
 public:
   explicit QtConnectionAdapter(const ConnectionConfig& config) { ConnectionManager::init(config); }
@@ -43,8 +47,8 @@ public:
   QtConnectionAdapter& operator=(const QtConnectionAdapter&) = delete;
 
   template <typename T>
-  static bool sendMessage(const std::string& key, const T& payload) {
-    return ConnectionManager::sendMessage(key, payload);
+  static bool sendMessage(const QString& key, const T& payload) {
+    return ConnectionManager::sendMessage(key.toStdString(), payload);
   }
 
   template <typename T>
@@ -53,25 +57,31 @@ public:
   }
 
   // Blocks the calling thread for up to timeoutMs waiting on the reply - never call from the UI thread.
-  static bool sendRequest(const std::string& topic, const std::string& payload, std::string& outResponse, int timeoutMs = 5000) {
-    return ConnectionManager::sendRequest(topic, payload, outResponse, timeoutMs);
+  // QString assumes UTF-8 text; use the templated overload for binary/protobuf payloads.
+  static bool sendRequest(const QString& topic, const QString& payload, QString& outResponse, int timeoutMs = 5000) {
+    std::string response;
+    if (!ConnectionManager::sendRequest(topic.toStdString(), payload.toStdString(), response, timeoutMs)) {
+      return false;
+    }
+    outResponse = QString::fromStdString(response);
+    return true;
   }
 
   template <typename ReqT, typename ResT>
-  static bool sendRequest(const std::string& topic, const ReqT& payload, ResT& outResponse, int timeoutMs = 5000) {
-    return ConnectionManager::sendRequest(topic, payload, outResponse, timeoutMs);
+  static bool sendRequest(const QString& topic, const ReqT& payload, ResT& outResponse, int timeoutMs = 5000) {
+    return ConnectionManager::sendRequest(topic.toStdString(), payload, outResponse, timeoutMs);
   }
 
-  static void unregisterCallback(const std::string& key, QObject* context) { ConnectionManager::unregisterCallback(key, context); }
+  static void unregisterCallback(const QString& key, QObject* context) { ConnectionManager::unregisterCallback(key.toStdString(), context); }
 
   // Lambdas
   template <typename Callable>
-  static void registerCallback(const std::string& key, QObject* context, Callable func) {
+  static void registerCallback(const QString& key, QObject* context, Callable func) {
     using ArgType = typename CallableTraits<Callable>::ArgType;
     using BaseT = typename std::decay<ArgType>::type;
 
     ConnectionManager::registerCallback(
-        key,
+        key.toStdString(),
         [context, func](const BaseT& payload) {
           QMetaObject::invokeMethod(
               context, [func, payload]() { func(payload); }, Qt::QueuedConnection);
@@ -81,13 +91,13 @@ public:
 
   // Class Member Functions (1 Argument)
   template <typename ClassType, typename ArgType>
-  static void registerCallback(const std::string& key, ClassType* context, void (ClassType::*method)(ArgType)) {
+  static void registerCallback(const QString& key, ClassType* context, void (ClassType::*method)(ArgType)) {
     static_assert(std::is_base_of<QObject, ClassType>::value, "Context must inherit from QObject!");
 
     using BaseT = typename std::decay<ArgType>::type;
 
     ConnectionManager::registerCallback(
-        key,
+        key.toStdString(),
         [context, method](const BaseT& payload) {
           QMetaObject::invokeMethod(
               context, [context, method, payload]() { (context->*method)(payload); }, Qt::QueuedConnection);
@@ -97,11 +107,11 @@ public:
 
   // Class Member Functions (0 Arguments)
   template <typename ClassType>
-  static void registerCallback(const std::string& key, ClassType* context, void (ClassType::*method)()) {
+  static void registerCallback(const QString& key, ClassType* context, void (ClassType::*method)()) {
     static_assert(std::is_base_of<QObject, ClassType>::value, "Context must inherit from QObject!");
 
     ConnectionManager::registerCallback(
-        key,
+        key.toStdString(),
         [context, method]() {
           QMetaObject::invokeMethod(
               context, [context, method]() { (context->*method)(); }, Qt::QueuedConnection);
@@ -110,4 +120,4 @@ public:
   }
 };
 
-#endif  // QTCONNECTIONMANAGER_H
+#endif  // QTCONNECTIONADAPTER_H

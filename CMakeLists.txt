@@ -9,7 +9,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-list(APPEND CMAKE_PREFIX_PATH "/home/erladion/.local/")
+list(APPEND CMAKE_PREFIX_PATH "$ENV{HOME}/.local")
 
 find_package(Protobuf REQUIRED)
 find_package(absl CONFIG REQUIRED)
